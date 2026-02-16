@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">xiaobai-fund</string>
+    <string name="title_activity_main">xiaobai-fund</string>
+    <string name="package_name">com.xiaobai.fund</string>
+    <string name="custom_url_scheme">com.xiaobai.fund</string>
+</resources>
