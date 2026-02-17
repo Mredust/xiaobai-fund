@@ -1,11 +1,11 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import {computed, onBeforeUnmount, ref, watch} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {showToast} from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
-import { searchFunds, type SearchFundResult } from '@/api/fundApi'
-import { useFundStore } from '@/stores/funds'
-import { useTagStore } from '@/stores/tags'
+import {searchFunds, type SearchFundResult} from '@/api/fundApi'
+import {useFundStore} from '@/stores/funds'
+import {useTagStore} from '@/stores/tags'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,7 +20,6 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 const historyList = computed(() => fundStore.searchHistory)
-const hotList = computed(() => fundStore.hotFunds)
 const pickMode = computed(() => String(route.query.mode || ''))
 const isPickMode = computed(() => pickMode.value === 'pick' || pickMode.value === 'pick-convert')
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
@@ -55,7 +54,7 @@ const manualSearch = () => {
 }
 
 const selectHistory = (item: SearchFundResult) => {
-  // 点击历史/热搜项后回填输入并立刻开始搜索。
+  // 点击历史项后回填输入并立刻开始搜索。
   keyword.value = item.code
   manualSearch()
 }
@@ -64,9 +63,9 @@ const chooseFund = (item: SearchFundResult) => {
   // 选择模式下，根据来源场景回填目标数据。
   fundStore.recordSearchHistory(item)
   if (pickMode.value === 'pick') {
-    fundStore.setManualImportFund({ code: item.code, name: item.name })
+    fundStore.setManualImportFund({code: item.code, name: item.name})
   } else {
-    fundStore.setConvertTargetFund({ code: item.code, name: item.name })
+    fundStore.setConvertTargetFund({code: item.code, name: item.name})
   }
   router.back()
 }
@@ -105,25 +104,25 @@ const clearHistory = () => {
 }
 
 watch(
-  keyword,
-  (value) => {
-    // 输入防抖：停止输入 1.5 秒后再发起搜索。
-    if (debounceTimer) {
-      clearTimeout(debounceTimer)
-      debounceTimer = null
-    }
+    keyword,
+    (value) => {
+      // 输入防抖：停止输入 1.5 秒后再发起搜索。
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+        debounceTimer = null
+      }
 
-    if (!value.trim()) {
-      results.value = []
-      loading.value = false
-      return
-    }
+      if (!value.trim()) {
+        results.value = []
+        loading.value = false
+        return
+      }
 
-    debounceTimer = setTimeout(() => {
-      void runSearch(value)
-    }, 1500)
-  },
-  { flush: 'post' }
+      debounceTimer = setTimeout(() => {
+        void runSearch(value)
+      }, 1500)
+    },
+    {flush: 'post'}
 )
 
 onBeforeUnmount(() => {
@@ -137,58 +136,45 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page fund-search-page">
-    <BaseTopNav title="搜索" />
+    <BaseTopNav title="搜索"/>
 
     <section class="search-panel card">
       <div class="search-row">
         <van-field
-          v-model="keyword"
-          left-icon="search"
-          clearable
-          placeholder="请输入基金代码/名称/首字母"
-          class="search-field"
-          @keyup.enter="manualSearch"
+            v-model="keyword"
+            left-icon="search"
+            clearable
+            placeholder="请输入基金代码/名称/首字母"
+            class="search-field"
+            @keyup.enter="manualSearch"
         />
         <button type="button" class="search-action" @click="manualSearch">搜索</button>
       </div>
 
       <template v-if="!hasKeyword">
         <div class="section-head">
-          <h3>搜索历史</h3>
+          <strong>搜索历史</strong>
           <button type="button" class="clear-btn" @click="clearHistory">
-            <van-icon name="delete-o" size="18" />
+            <van-icon name="delete-o" size="18"/>
           </button>
         </div>
 
         <div class="history-grid">
-          <button v-for="item in historyList" :key="item.code" type="button" class="history-item" @click="selectHistory(item)">
+          <button v-for="item in historyList" :key="item.code" type="button" class="history-item"
+                  @click="selectHistory(item)">
             {{ item.name }}
-          </button>
-        </div>
-
-        <div class="section-head hot-head">
-          <h3>热搜基金Top5</h3>
-        </div>
-
-        <div class="hot-list">
-          <button v-for="(item, index) in hotList" :key="item.code" type="button" class="hot-item" @click="selectHistory(item)">
-            <span class="rank">{{ index + 1 }}</span>
-            <div class="hot-main">
-              <strong>{{ item.name }}</strong>
-              <span>{{ item.code }}</span>
-            </div>
           </button>
         </div>
       </template>
 
       <template v-else>
         <div v-if="loading" class="loading-wrap">
-          <van-loading type="spinner" size="24" />
+          <van-loading type="spinner" size="24"/>
           <span>搜索中...</span>
         </div>
 
         <div v-else-if="results.length === 0" class="loading-wrap">
-          <van-empty image="search" description="未搜索到基金" />
+          <van-empty image="search" description="未搜索到基金"/>
         </div>
 
         <div v-else class="result-list">
@@ -198,11 +184,11 @@ onBeforeUnmount(() => {
               <span>{{ item.code }}</span>
             </div>
             <button
-              v-if="!isPickMode"
-              type="button"
-              class="watch-btn"
-              :class="{ active: isWatchFund(item.code) }"
-              @click="toggleWatch(item, $event)"
+                v-if="!isPickMode"
+                type="button"
+                class="watch-btn"
+                :class="{ active: isWatchFund(item.code) }"
+                @click="toggleWatch(item, $event)"
             >
               {{ isWatchFund(item.code) ? '已自选' : '加自选' }}
             </button>
@@ -226,7 +212,7 @@ onBeforeUnmount(() => {
 .search-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .search-field {
@@ -236,24 +222,28 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.van-cell {
+  padding: 5px;
+}
+
 .search-action {
   border: 0;
   background: transparent;
   color: #2f5bd8;
-  font-size: 1.375rem;
+  font-size: 1rem;
   cursor: pointer;
 }
 
 .section-head {
-  margin-top: 14px;
+  margin-top: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.section-head h3 {
+.section-head strong {
   margin: 0;
-  font-size: 2.125rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -283,64 +273,6 @@ onBeforeUnmount(() => {
   padding: 0;
   min-height: 28px;
   cursor: pointer;
-}
-
-.hot-head {
-  margin-top: 24px;
-}
-
-.hot-list {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.hot-item {
-  border: 0;
-  background: transparent;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  cursor: pointer;
-  text-align: left;
-  padding: 4px 0;
-}
-
-.rank {
-  width: 20px;
-  font-size: 1.5rem;
-  font-style: italic;
-  font-weight: 700;
-  color: #0e2149;
-  margin-top: 1px;
-}
-
-.hot-item:nth-child(1) .rank {
-  color: #f28a18;
-}
-
-.hot-item:nth-child(2) .rank {
-  color: #5f98db;
-}
-
-.hot-item:nth-child(3) .rank {
-  color: #f2b53f;
-}
-
-.hot-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.hot-main strong {
-  font-size: 1rem;
-}
-
-.hot-main span {
-  color: #7f8597;
-  font-size: 0.875rem;
 }
 
 .loading-wrap {
@@ -405,5 +337,3 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 </style>
-
-
