@@ -1,13 +1,15 @@
 ﻿<script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import {computed, ref, watch} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {showConfirmDialog, showToast} from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
-import TrendChart from './components/TrendChart.vue'
-import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
-import { useFundStore } from '@/stores/funds'
-import { formatPercent, formatYmd } from '@/utils/format'
+import TrendChart from '@/views/fund/components/TrendChart.vue'
+import {fetchFundData, type FundDetailResult} from '@/api/fundApi'
+import {useFundStore} from '@/stores/funds'
+import {formatPercent, formatYmd} from '@/utils/format'
+import {globalSettings} from "@/config/global.ts";
 
+const appName = globalSettings.appName;
 const route = useRoute()
 const router = useRouter()
 const fundStore = useFundStore()
@@ -16,8 +18,17 @@ const loading = ref(false)
 const errorText = ref('')
 const detail = ref<FundDetailResult | null>(null)
 const activeTab = ref<'sector' | 'performance'>('sector')
-const activePeriod = ref<'1m' | '3m' | '6m' | '1y' | '3y'>('3m')
+type PeriodKey = '1m' | '3m' | '6m' | '1y' | '3y'
+const periodOptions: Array<{ key: PeriodKey; label: string }> = [
+  {key: '1m', label: '近1月'},
+  {key: '3m', label: '近3月'},
+  {key: '6m', label: '近6月'},
+  {key: '1y', label: '近1年'},
+  {key: '3y', label: '近3年'}
+]
+const activePeriod = ref<PeriodKey>('3m')
 const showMoreSheet = ref(false)
+const intradayXAxisLabels = ['9:30', '11:30/13:00', '15:00']
 
 const code = computed(() => String(route.params.code || '').trim())
 
@@ -28,31 +39,31 @@ const positionInfo = computed(() => {
   }
 
   return (
-    fundStore.positionByCode[code.value] || {
-      amount: '0.00',
-      ratio: '--',
-      cost: '--',
-      profit: '0.00',
-      profitRate: '--',
-      holdingDays: '--',
-      yesterdayProfit: '0.00',
-      yesterdayProfitRate: '--'
-    }
+      fundStore.positionByCode[code.value] || {
+        amount: '0.00',
+        ratio: '--',
+        cost: '--',
+        profit: '0.00',
+        profitRate: '--',
+        holdingDays: '--',
+        yesterdayProfit: '0.00',
+        yesterdayProfitRate: '--'
+      }
   )
 })
 
 const moreActions = computed(() => {
   // 更多弹窗仅保留基金PK和笔记两个入口。
   return [
-    { name: '基金PK', key: 'fund-pk' },
-    { name: '笔记', key: 'note' }
+    {name: '基金PK', key: 'fund-pk'},
+    {name: '笔记', key: 'note'}
   ]
 })
 
 const trendByPeriod = computed(() => {
   // 根据周期筛选走势图数据点。
   const list = detail.value?.historyTrend || []
-  const map = {
+  const map: Record<PeriodKey, number> = {
     '1m': 22,
     '3m': 66,
     '6m': 132,
@@ -60,6 +71,105 @@ const trendByPeriod = computed(() => {
     '3y': 365
   }
   return list.slice(-map[activePeriod.value])
+})
+
+const nearestCloseDate = computed(() => {
+  // 计算距离今天最近的收盘日期（优先今天之前最近一天）。
+  const list = detail.value?.historyTrend || []
+  if (!list.length) {
+    return null
+  }
+
+  const now = Date.now()
+  let latestPast = -Infinity
+  let nearestFuture = Infinity
+
+  list.forEach((item) => {
+    const timestamp = item.x
+    if (timestamp <= now && timestamp > latestPast) {
+      latestPast = timestamp
+      return
+    }
+
+    if (timestamp > now && timestamp < nearestFuture) {
+      nearestFuture = timestamp
+    }
+  })
+
+  const target = latestPast > -Infinity ? latestPast : nearestFuture
+  if (!Number.isFinite(target)) {
+    return null
+  }
+
+  return new Date(target)
+})
+
+const subtractMonths = (baseDate: Date, months: number) => {
+  // 月份回退时保持尽量相同“日”并处理月末边界。
+  const date = new Date(baseDate)
+  const day = date.getDate()
+  date.setDate(1)
+  date.setMonth(date.getMonth() - months)
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  date.setDate(Math.min(day, lastDay))
+  return date
+}
+
+const dateRangeStartByPeriod = computed(() => {
+  // 左端日期按“当前日期减所选周期”计算。
+  const today = new Date()
+  const monthMap: Record<PeriodKey, number> = {
+    '1m': 1,
+    '3m': 3,
+    '6m': 6,
+    '1y': 12,
+    '3y': 36
+  }
+  return subtractMonths(today, monthMap[activePeriod.value])
+})
+
+const performanceXAxisLabels = computed(() => {
+  const leftDate = dateRangeStartByPeriod.value
+  const rightDate = nearestCloseDate.value || new Date()
+  const middleDate = new Date(Math.round((leftDate.getTime() + rightDate.getTime()) / 2))
+
+  return [formatYmd(leftDate), formatYmd(middleDate), formatYmd(rightDate)]
+})
+
+const selectedPeriodLabel = computed(() => {
+  return periodOptions.find((item) => item.key === activePeriod.value)?.label || '近3月'
+})
+
+const selectedPeriodRangeChange = computed(() => {
+  // 计算所选区间的涨跌幅。
+  const list = trendByPeriod.value
+  if (list.length < 2) {
+    return null
+  }
+
+  const first = list[0]?.y
+  const last = list[list.length - 1]?.y
+  if (typeof first !== 'number' || typeof last !== 'number' || !Number.isFinite(first) || first === 0 || !Number.isFinite(last)) {
+    return null
+  }
+
+  return ((last - first) / first) * 100
+})
+
+const selectedPeriodCostLineChange = computed(() => {
+  // 以当前持仓成本估算成本线收益率。
+  const latestNav = trendByPeriod.value[trendByPeriod.value.length - 1]?.y
+  if (typeof latestNav !== 'number' || !Number.isFinite(latestNav) || latestNav <= 0) {
+    return null
+  }
+
+  const rawCost = String(positionInfo.value?.cost || '').replace(/[^\d.-]/g, '')
+  const cost = Number(rawCost)
+  if (!Number.isFinite(cost) || cost <= 0) {
+    return null
+  }
+
+  return ((latestNav - cost) / cost) * 100
 })
 
 const intradayTrend = computed(() => {
@@ -76,42 +186,29 @@ const tenTradeRows = computed(() => {
   }
 
   return list
-    .slice(-10)
-    .map((item, index, array) => {
-      const prev = array[index - 1]
-      const change = prev && prev.y !== 0 ? ((item.y - prev.y) / prev.y) * 100 : item.equityReturn || 0
-      return {
-        date: formatYmd(new Date(item.x)),
-        nav: item.y,
-        change
-      }
-    })
-    .reverse()
+      .slice(-10)
+      .map((item, index, array) => {
+        const prev = array[index - 1]
+        const change = prev && prev.y !== 0 ? ((item.y - prev.y) / prev.y) * 100 : item.equityReturn || 0
+        return {
+          date: formatYmd(new Date(item.x)),
+          nav: item.y,
+          change
+        }
+      })
+      .reverse()
 })
 
-const relatedBoards = computed(() => {
-  // 构建关联板块列表，优先显示已知板块，其次补足市场热门板块。
-  const names = new Set<string>()
-  const rows: Array<{ name: string; trend: number }> = []
-
-  const watchFund = fundStore.getWatchFundByCode(code.value)
-  if (watchFund?.boardName) {
-    names.add(watchFund.boardName)
+const formatHoldingChange = (value: number | null) => {
+  // 重仓股涨跌幅文案：正数带 +，0 不带符号。
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '--'
   }
-
-  fundStore.marketSectors.forEach((sector) => {
-    if (!names.has(sector.name) && rows.length < 4) {
-      names.add(sector.name)
-    }
-  })
-
-  names.forEach((name) => {
-    const sector = fundStore.getSectorByName(name)
-    rows.push({ name, trend: sector?.trend ?? 0 })
-  })
-
-  return rows
-})
+  if (value === 0) {
+    return '0.00%'
+  }
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
+}
 
 const loadDetail = async () => {
   // 请求基金详情接口并刷新页面状态。
@@ -131,11 +228,6 @@ const loadDetail = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const openSector = (name: string) => {
-  // 点击关联板块跳转板块详情。
-  router.push(`/sector/${encodeURIComponent(name)}`)
 }
 
 const openEditHolding = () => {
@@ -165,7 +257,8 @@ const deleteHolding = async () => {
     }
 
     showToast('已删持有')
-  } catch {}
+  } catch {
+  }
 }
 
 const deleteWatch = async () => {
@@ -185,7 +278,8 @@ const deleteWatch = async () => {
     }
 
     showToast('已删自选')
-  } catch {}
+  } catch {
+  }
 }
 
 const openMore = () => {
@@ -206,51 +300,51 @@ const handleMoreAction = (action: { key?: string }) => {
 }
 
 watch(
-  () => code.value,
-  () => {
-    // 路由 code 变化时重新加载详情。
-    void loadDetail()
-  },
-  { immediate: true }
+    () => code.value,
+    () => {
+      // 路由 code 变化时重新加载详情。
+      void loadDetail()
+    },
+    {immediate: true}
 )
 </script>
 
 <template>
   <div class="page fund-detail-page">
-    <BaseTopNav title="养基宝" />
+    <BaseTopNav class="fund-top-nav" :title="appName"/>
 
     <section v-if="loading" class="card loading-card">
-      <van-loading size="28" />
+      <van-loading size="28"/>
       <span>详情加载中...</span>
     </section>
 
     <section v-else-if="errorText" class="card loading-card">
-      <van-empty image="error" :description="errorText" />
+      <van-empty image="error" :description="errorText"/>
     </section>
 
     <template v-else-if="detail">
-      <section class="card header-card">
+      <section class="card fund-name-card">
         <div class="fund-name-wrap">
-          <van-icon name="arrow-left" size="16" color="#606780" />
           <div class="fund-title">
             <strong>{{ detail.name }}</strong>
             <span>{{ detail.code }}</span>
           </div>
-          <van-icon name="arrow" size="16" color="#606780" />
         </div>
+      </section>
 
+      <section class="card header-card">
         <div class="metrics-row">
-          <div class="metric-item">
-            <label>当日涨幅</label>
+          <div class="metric-item metric-item--daily">
             <strong :class="detail.gszzl >= 0 ? 'up' : 'down'">{{ formatPercent(detail.gszzl) }}</strong>
+            <label>当日涨幅</label>
           </div>
           <div class="metric-item">
-            <label>近一年</label>
             <strong class="up">{{ formatPercent(detail.yearChange) }}</strong>
+            <label>近一年</label>
           </div>
           <div class="metric-item">
-            <label>热度排名</label>
             <strong>{{ detail.heatRank }}/{{ detail.heatTotal }}</strong>
+            <label>热度排名</label>
           </div>
         </div>
 
@@ -291,40 +385,75 @@ watch(
       </section>
 
       <section class="card tab-card">
-        <van-tabs v-model:active="activeTab" line-width="24px" title-active-color="#162441" title-inactive-color="#707892">
+        <van-tabs v-model:active="activeTab" line-width="24px" title-active-color="#162441"
+                  title-inactive-color="#707892">
           <van-tab name="sector" title="关联板块">
             <div class="tab-content">
               <div class="tab-tip">
                 <span>当日走势</span>
                 <strong :class="detail.gszzl >= 0 ? 'up' : 'down'">{{ formatPercent(detail.gszzl) }}</strong>
               </div>
-              <TrendChart :points="intradayTrend" color="#13a368" />
+              <TrendChart :points="intradayTrend" color="#13a368" :x-axis-labels="intradayXAxisLabels"/>
 
-              <div class="board-list">
-                <button v-for="item in relatedBoards" :key="item.name" type="button" class="board-item" @click="openSector(item.name)">
-                  <span>{{ item.name }}</span>
-                  <strong :class="item.trend >= 0 ? 'up' : 'down'">{{ formatPercent(item.trend) }}</strong>
-                </button>
+              <div class="holding-panel">
+                <div class="holding-head">
+                  <span>股票</span>
+                  <span>持仓占比</span>
+                  <span>涨跌幅</span>
+                </div>
+
+                <div v-if="detail.holdings.length" class="holding-body">
+                  <div v-for="item in detail.holdings" :key="`${item.code}-${item.name}`" class="holding-row">
+                    <div class="holding-stock">
+                      <strong>{{ item.name }}</strong>
+                      <span>{{ item.code }}</span>
+                    </div>
+                    <div class="holding-weight">{{ item.weight }}</div>
+                    <div class="holding-change"
+                         :class="typeof item.change === 'number' ? (item.change > 0 ? 'up' : item.change < 0 ? 'down' : 'flat') : 'flat'">
+                      {{ formatHoldingChange(item.change) }}
+                    </div>
+                  </div>
+                </div>
+
+                <van-empty v-else image="error" description="暂无持仓数据"/>
               </div>
             </div>
           </van-tab>
 
           <van-tab name="performance" title="业绩走势">
             <div class="tab-content">
-              <div class="period-switch">
-                <button
-                  v-for="period in ['1m', '3m', '6m', '1y', '3y']"
-                  :key="period"
-                  type="button"
-                  class="period-btn"
-                  :class="{ active: period === activePeriod }"
-                  @click="activePeriod = period as '1m' | '3m' | '6m' | '1y' | '3y'"
-                >
-                  {{ period }}
-                </button>
+              <div class="performance-meta">
+                <div class="meta-item">
+                  <span>{{ selectedPeriodLabel }}涨跌幅</span>
+                  <strong
+                      :class="selectedPeriodRangeChange !== null ? (selectedPeriodRangeChange >= 0 ? 'up' : 'down') : ''">
+                    {{ selectedPeriodRangeChange === null ? '--' : formatPercent(selectedPeriodRangeChange) }}
+                  </strong>
+                </div>
+                <div class="meta-item">
+                  <span>成本线</span>
+                  <strong
+                      :class="selectedPeriodCostLineChange !== null ? (selectedPeriodCostLineChange >= 0 ? 'up' : 'down') : ''">
+                    {{ selectedPeriodCostLineChange === null ? '--' : formatPercent(selectedPeriodCostLineChange) }}
+                  </strong>
+                </div>
               </div>
 
-              <TrendChart :points="trendByPeriod" color="#4a78f1" />
+              <TrendChart :points="trendByPeriod" color="#4a78f1" :x-axis-labels="performanceXAxisLabels"/>
+
+              <div class="period-switch">
+                <button
+                    v-for="period in periodOptions"
+                    :key="period.key"
+                    type="button"
+                    class="period-btn"
+                    :class="{ active: period.key === activePeriod }"
+                    @click="activePeriod = period.key"
+                >
+                  {{ period.label }}
+                </button>
+              </div>
 
               <div class="table-head">
                 <span>日期</span>
@@ -345,45 +474,73 @@ watch(
 
       <section class="detail-bottom-bar">
         <button type="button" class="bar-btn" @click="openEditHolding">
-          <van-icon name="edit" size="18" />
+          <van-icon name="edit" size="18"/>
           <span>修改持仓</span>
         </button>
         <button type="button" class="bar-btn" @click="openTradeRecord">
-          <van-icon name="notes-o" size="18" />
+          <van-icon name="notes-o" size="18"/>
           <span>交易记录</span>
         </button>
         <button type="button" class="bar-btn" @click="deleteWatch">
-          <van-icon name="minus" size="18" />
+          <van-icon name="minus" size="18"/>
           <span>删自选</span>
         </button>
         <button type="button" class="bar-btn" @click="deleteHolding">
-          <van-icon name="delete-o" size="18" />
+          <van-icon name="delete-o" size="18"/>
           <span>删持有</span>
         </button>
         <button type="button" class="bar-btn" @click="openMore">
-          <van-icon name="ellipsis" size="18" />
+          <van-icon name="ellipsis" size="18"/>
           <span>更多</span>
         </button>
       </section>
     </template>
 
     <van-action-sheet
-      v-model:show="showMoreSheet"
-      :actions="moreActions"
-      cancel-text="取消"
-      close-on-click-action
-      @select="handleMoreAction"
+        v-model:show="showMoreSheet"
+        :actions="moreActions"
+        cancel-text="取消"
+        close-on-click-action
+        @select="handleMoreAction"
     />
   </div>
 </template>
 
 <style scoped>
 .fund-detail-page {
+  --top-nav-height: 52px;
+  --fund-name-height: 60px;
+  --fixed-header-height: calc(var(--top-nav-height) + var(--fund-name-height));
   padding-top: 0;
   padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+
+.fund-top-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 30;
+}
+
+.fund-name-card {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--top-nav-height);
+  z-index: 29;
+  padding: 10px 12px;
+  box-sizing: border-box;
 }
 
 .loading-card {
+  margin-top: calc(var(--top-nav-height) + 10px);
   min-height: 180px;
   display: flex;
   align-items: center;
@@ -393,6 +550,7 @@ watch(
 }
 
 .header-card {
+  margin-top: calc(var(--fixed-header-height));
   padding: 12px;
 }
 
@@ -400,6 +558,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid #ccc;
 }
 
 .fund-title {
@@ -410,12 +569,15 @@ watch(
 }
 
 .fund-title strong {
-  font-size: 1.75rem;
+  font-size: 1rem;
   line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 2px;
 }
 
 .fund-title span {
-  font-size: 0.9375rem;
+  margin-top: 4px;
+  font-size: 0.9rem;
   color: #747c92;
 }
 
@@ -424,6 +586,7 @@ watch(
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  align-items: end;
 }
 
 .metric-item {
@@ -438,6 +601,11 @@ watch(
 }
 
 .metric-item strong {
+  font-size: 1.125rem;
+  line-height: 1.2;
+}
+
+.metric-item--daily strong {
   font-size: 1.875rem;
   line-height: 1;
 }
@@ -491,43 +659,124 @@ watch(
   font-size: 1.125rem;
 }
 
-.board-list {
-  margin-top: 8px;
+.holding-panel {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.holding-head,
+.holding-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.holding-head {
+  min-height: 36px;
+  background: #f7f8fc;
+  color: #7a8198;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.holding-head span:nth-child(2),
+.holding-head span:nth-child(3),
+.holding-weight,
+.holding-change {
+  text-align: right;
+}
+
+.holding-row {
+  min-height: 58px;
+  border-bottom: 1px solid var(--line);
+}
+
+.holding-row:last-child {
+  border-bottom: 0;
+}
+
+.holding-stock {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
-.board-item {
-  border: 0;
-  background: transparent;
-  border-bottom: 1px solid var(--line);
+.holding-stock strong {
+  font-size: 1rem;
+  line-height: 1.1;
+  font-weight: 500;
+  color: #1d2647;
+}
+
+.holding-stock span {
+  font-size: 0.8125rem;
+  color: #8b92a9;
+}
+
+.holding-weight,
+.holding-change {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1d2647;
+}
+
+.holding-change.flat {
+  color: #6f7790;
+}
+
+.holding-change.up {
+  color: #e34a4a;
+}
+
+.holding-change.down {
+  color: #22a06b;
+}
+
+.performance-meta {
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.meta-item {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faff;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  min-height: 44px;
-  cursor: pointer;
+  align-items: baseline;
 }
 
-.board-item span {
-  font-size: 1rem;
+.meta-item span {
+  font-size: 0.8125rem;
+  color: #7d8498;
 }
 
-.board-item strong {
+.meta-item strong {
   font-size: 1rem;
+  line-height: 1.2;
 }
 
 .period-switch {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 10px;
   margin-bottom: 10px;
 }
 
 .period-btn {
+  flex: 1;
   border: 0;
   background: #f2f4fb;
   color: #6f7790;
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 6px 8px;
   font-size: 0.8125rem;
   cursor: pointer;
 }
@@ -542,12 +791,18 @@ watch(
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
   align-items: center;
+  padding: 0 10px;
 }
 
 .table-head {
   margin-top: 10px;
   color: #7a8198;
   font-size: 0.8125rem;
+}
+
+.table-head span:last-child,
+.table-row span:last-child {
+  text-align: right;
 }
 
 .table-body {
@@ -558,10 +813,6 @@ watch(
   min-height: 36px;
   font-size: 0.9375rem;
   border-bottom: 1px solid var(--line);
-}
-
-.table-row span:last-child {
-  text-align: right;
 }
 
 .detail-bottom-bar {
@@ -591,5 +842,3 @@ watch(
   cursor: pointer;
 }
 </style>
-
-

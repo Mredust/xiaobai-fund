@@ -6,13 +6,21 @@ interface TrendPoint {
   y: number
 }
 
+type AxisLabelNode = {
+  text: string
+  left: string
+  className: 'start' | 'middle' | 'end'
+}
+
 const props = withDefaults(
   defineProps<{
     points: TrendPoint[]
     color?: string
+    xAxisLabels?: string[]
   }>(),
   {
-    color: '#2c77f4'
+    color: '#2c77f4',
+    xAxisLabels: () => []
   }
 )
 
@@ -56,6 +64,27 @@ const areaPath = computed(() => {
   const line = linePath.value
   return `${line} L ${viewWidth},${viewHeight} L 0,${viewHeight} Z`
 })
+
+const axisLabels = computed<AxisLabelNode[]>(() => {
+  // 生成 X 轴标签定位，保证两端贴边、中间居中。
+  const list = props.xAxisLabels.filter((item) => item?.trim())
+  if (!list.length) {
+    return []
+  }
+
+  return list.map((text, index) => {
+    if (index === 0) {
+      return { text, left: '0%', className: 'start' as const }
+    }
+
+    if (index === list.length - 1) {
+      return { text, left: '100%', className: 'end' as const }
+    }
+
+    const left = `${(index / (list.length - 1)) * 100}%`
+    return { text, left, className: 'middle' as const }
+  })
+})
 </script>
 
 <template>
@@ -71,6 +100,18 @@ const areaPath = computed(() => {
       <path v-if="areaPath" :d="areaPath" :fill="`url(#${gradientId})`" />
       <path v-if="linePath" :d="linePath" :stroke="color" stroke-width="2" fill="none" />
     </svg>
+
+    <div v-if="axisLabels.length" class="x-axis-row">
+      <span
+        v-for="item in axisLabels"
+        :key="`${item.left}-${item.text}`"
+        class="x-axis-label"
+        :class="`is-${item.className}`"
+        :style="{ left: item.left }"
+      >
+        {{ item.text }}
+      </span>
+    </div>
 
     <van-empty v-if="!points.length" image="error" description="暂无走势图数据" />
   </div>
@@ -90,6 +131,37 @@ svg {
   display: block;
   width: 100%;
   height: 180px;
+}
+
+.x-axis-row {
+  position: relative;
+  height: 22px;
+  padding: 2px 10px 8px;
+  box-sizing: border-box;
+}
+
+.x-axis-label {
+  position: absolute;
+  top: 2px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #7d8498;
+  white-space: nowrap;
+}
+
+.x-axis-label.is-start {
+  transform: translateX(0);
+  text-align: left;
+}
+
+.x-axis-label.is-middle {
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.x-axis-label.is-end {
+  transform: translateX(-100%);
+  text-align: right;
 }
 
 :deep(.van-empty) {

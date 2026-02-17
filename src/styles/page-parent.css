@@ -4,7 +4,6 @@
 
 .card {
   background: var(--card-bg);
-  box-shadow: 0 0.375rem 1rem rgb(14 27 72 / 5%);
 }
 
 .up {
