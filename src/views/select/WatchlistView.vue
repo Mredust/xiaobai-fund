@@ -114,8 +114,11 @@ const onRefresh = async () => {
 
 <style scoped>
 .watchlist-page {
+  --tabbar-space: calc(3.5rem + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 100vw;
+  padding-bottom: var(--tabbar-space);
+  box-sizing: border-box;
   overflow-x: hidden;
   overscroll-behavior-x: none;
   touch-action: pan-y;

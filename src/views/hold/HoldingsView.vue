@@ -248,6 +248,7 @@ const openCategoryTag = (tagId: number) => {
 
 <style scoped>
 .holdings-page {
+  --tabbar-space: calc(3.5rem + env(safe-area-inset-bottom));
   padding: 0;
   height: calc(100vh - 3.5rem - env(safe-area-inset-bottom));
   display: flex;
@@ -300,6 +301,8 @@ const openCategoryTag = (tagId: number) => {
   flex-direction: column;
   gap: 10px;
   flex: 1;
+  padding-bottom: var(--tabbar-space);
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-x: none;
@@ -412,6 +415,8 @@ const openCategoryTag = (tagId: number) => {
 
 .funds-card {
   flex: 1;
+  padding-bottom: var(--tabbar-space);
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-x: none;
