@@ -379,6 +379,12 @@ export const useFundStore = defineStore('funds', {
       // 清空指定自选标签列表。
       this.watchFundsByTag[tagId] = []
     },
+    async refreshWatchFundsByTag(tagId: number) {
+      // 预留下拉刷新：仅刷新指定自选标签下的基金列表。
+      const list = this.watchFundsByTag[tagId] || []
+      // 当前先做最小占位刷新，后续可在此按 code 批量拉取实时数据并合并字段。
+      this.watchFundsByTag[tagId] = list.map((item) => ({ ...item }))
+    },
     isHoldingFund(code: string) {
       // 判断基金是否存在于任一持有标签中。
       return Object.values(this.holdingFundsByTag).some((list) => list.some((item) => item.code === code))

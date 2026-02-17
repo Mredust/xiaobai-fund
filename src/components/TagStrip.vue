@@ -20,18 +20,18 @@ const emit = defineEmits<{
   <div class="tag-strip">
     <div class="tag-scroll">
       <button
-        v-for="item in items"
-        :key="item.id"
-        type="button"
-        class="tag-btn"
-        :class="{ active: item.id === activeId }"
-        @click="emit('change', item.id)"
+          v-for="item in items"
+          :key="item.id"
+          type="button"
+          class="tag-btn"
+          :class="{ active: item.id === activeId }"
+          @click="emit('change', item.id)"
       >
         {{ item.name }}
       </button>
     </div>
     <button v-if="showAdd" type="button" class="add-btn" @click="emit('add')">
-      <van-icon name="plus" size="20" />
+      <van-icon name="plus" size="20"/>
     </button>
   </div>
 </template>
@@ -57,19 +57,19 @@ const emit = defineEmits<{
 }
 
 .tag-btn {
-  white-space: nowrap;
   border: 0;
+  white-space: nowrap;
   background: transparent;
-  font-size: 1.125rem;
+  font-size: 1rem;
   color: #5f6680;
   padding: 6px 10px;
-  border-radius: 999px;
   cursor: pointer;
 }
 
 .tag-btn.active {
   color: #111420;
   font-weight: 700;
+  border-bottom: 1px solid blue;
 }
 
 .add-btn {

@@ -1,10 +1,10 @@
 ﻿<script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import {computed, ref} from 'vue'
+import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
-import { useTagStore } from '@/stores/tags'
-import { useFundStore } from '@/stores/funds'
-import { formatPercent } from '@/utils/format'
+import {useTagStore} from '@/stores/tags'
+import {useFundStore} from '@/stores/funds'
+import {formatPercent} from '@/utils/format'
 
 const router = useRouter()
 const tagStore = useTagStore()
@@ -28,31 +28,51 @@ const toTagManage = () => {
   router.push('/tag-manage?scene=watchlist')
 }
 
+const toFundSearch = () => {
+  // 从自选页底部入口进入基金搜索，便于新增自选。
+  router.push('/fund-search')
+}
+
 const toDetail = (code: string) => {
   // 点击列表项跳转基金详情。
   router.push(`/fund/${code}`)
+}
+
+const refreshing = ref(false)
+
+const onRefresh = async () => {
+  // 预留：仅刷新当前标签下的自选基金，不影响其他标签。
+  try {
+    const refreshAction = (fundStore as { refreshWatchFundsByTag?: (tagId: number) => Promise<void> | void })
+      .refreshWatchFundsByTag
+
+    if (typeof refreshAction === 'function') {
+      await refreshAction(activeWatchTagId.value)
+      return
+    }
+
+    // 兜底：若历史缓存污染导致 action 被覆盖，仍保证下拉刷新不报错。
+    const tagId = activeWatchTagId.value
+    const list = fundStore.getWatchFundsByTag(tagId)
+    fundStore.watchFundsByTag[tagId] = list.map((item) => ({ ...item }))
+  } finally {
+    refreshing.value = false
+  }
 }
 </script>
 
 <template>
   <div class="page watchlist-page">
     <section class="card watch-top">
-      <TagStrip :items="watchTags" :active-id="activeWatchTagId" show-add @change="setActiveTag" @add="toTagManage" />
+      <TagStrip :items="watchTags" :active-id="activeWatchTagId" show-add @change="setActiveTag" @add="toTagManage"/>
 
       <div class="toolbar">
         <div class="icons">
-          <van-icon name="setting-o" size="19" />
-          <van-icon name="bell" size="19" />
-          <van-icon name="notes-o" size="19" />
-          <van-icon name="replay" size="19" />
+          <van-icon name="setting-o" size="19"/>
         </div>
         <div class="metrics">
           <div>
             <span>当日涨幅</span>
-            <small>02-13</small>
-          </div>
-          <div>
-            <span>关联板块</span>
             <small>02-13</small>
           </div>
         </div>
@@ -60,37 +80,52 @@ const toDetail = (code: string) => {
     </section>
 
     <section class="card list-card">
-      <van-empty v-if="watchFunds.length === 0" description="当前标签暂无基金" />
+      <van-pull-refresh v-model="refreshing" class="list-pull" @refresh="onRefresh">
+        <van-empty v-if="watchFunds.length === 0" description="当前标签暂无基金"/>
 
-      <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
-        <div class="left">
-          <strong>{{ item.name }}</strong>
-          <span>{{ item.code }}</span>
-        </div>
+        <template v-else>
+          <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
+            <div class="left">
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.code }}</span>
+            </div>
 
-        <div class="right">
-          <span class="change" :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ formatPercent(item.dailyChange) }}</span>
-          <div class="sub">
-            <span>净值 {{ item.nav.toFixed(4) }}</span>
-            <span :class="item.boardChange >= 0 ? 'up' : 'down'">{{ item.boardName }} {{ formatPercent(item.boardChange) }}</span>
-          </div>
-        </div>
-      </article>
+            <div class="right">
+              <span class="change" :class="item.dailyChange >= 0 ? 'up' : 'down'">{{
+                  formatPercent(item.dailyChange)
+                }}</span>
+              <div class="sub">
+                <span>{{ item.nav.toFixed(4) }}</span>
+              </div>
+            </div>
+          </article>
+        </template>
+      </van-pull-refresh>
+    </section>
+
+    <section class="add-watch-row">
+      <button type="button" class="add-watch-btn" @click="toFundSearch">
+        <van-icon name="plus" size="18"/>
+        <span>新增自选</span>
+      </button>
     </section>
   </div>
 </template>
 
 <style scoped>
 .watchlist-page {
-  padding-top: 10px;
+  overflow-x: hidden;
 }
 
 .watch-top {
+  position: sticky;
+  top: calc(0rem + env(safe-area-inset-top));
+  z-index: 10;
   padding: 10px 12px;
 }
 
 .toolbar {
-  margin-top: 10px;
+  margin-top: 5px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -120,8 +155,12 @@ const toDetail = (code: string) => {
 }
 
 .list-card {
-  margin-top: 10px;
   padding: 2px 12px;
+}
+
+.list-pull {
+  overflow-x: hidden;
+  touch-action: pan-y;
 }
 
 .fund-row {
@@ -148,7 +187,7 @@ const toDetail = (code: string) => {
 }
 
 .left strong {
-  font-size: 1rem;
+  font-size: 0.8rem;
   line-height: 1.2;
 }
 
@@ -164,7 +203,7 @@ const toDetail = (code: string) => {
 }
 
 .change {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -178,6 +217,20 @@ const toDetail = (code: string) => {
   font-size: 0.75rem;
   color: #7d8397;
 }
+
+.add-watch-btn {
+  border: 0;
+  background: transparent;
+  color: #8a90a5;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.add-watch-row {
+  padding: 10px 12px 0;
+}
 </style>
-
-

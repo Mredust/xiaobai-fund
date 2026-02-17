@@ -1,4 +1,7 @@
 ﻿<script setup lang="ts">
+import {globalSettings} from '@/config/global'
+
+const appName = globalSettings.appName
 const emit = defineEmits<{
   search: []
 }>()
@@ -12,9 +15,9 @@ const handleSearch = () => {
 <template>
   <header class="common-header">
     <div class="left-placeholder" aria-hidden="true"></div>
-    <h1 class="title">小白基金</h1>
+    <h1 class="title">{{ appName }}</h1>
     <button type="button" class="search-btn" @click="handleSearch">
-      <van-icon name="search" size="20" />
+      <van-icon name="search" size="20"/>
     </button>
   </header>
 </template>
@@ -46,7 +49,7 @@ const handleSearch = () => {
 
 .title {
   margin: 0;
-  font-size: 1.1875rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
