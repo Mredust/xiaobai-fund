@@ -1,8 +1,8 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useFundStore } from '@/stores/funds'
-import { formatPercent, formatSignedNumber } from '@/utils/format'
+import {computed, onMounted, ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {useFundStore} from '@/stores/funds'
+import {formatPercent, formatSignedNumber} from '@/utils/format'
 import {
   fetchMarketIndicesFast,
   fetchMarketOverview,
@@ -157,15 +157,15 @@ onMounted(() => {
   <div class="page market-page">
     <section class="card indices-card">
       <div v-if="indicesLoading" class="loading-wrap">
-        <van-loading size="22" />
+        <van-loading size="22"/>
       </div>
 
       <div v-else class="indices-scroll">
         <article
-          v-for="item in indices"
-          :key="item.code"
-          class="index-item"
-          :class="item.changePercent >= 0 ? 'up' : 'down'"
+            v-for="item in indices"
+            :key="item.code"
+            class="index-item"
+            :class="item.changePercent >= 0 ? 'up' : 'down'"
         >
           <div class="index-name">{{ item.name }}</div>
           <strong class="index-current">{{ item.current.toFixed(2) }}</strong>
@@ -179,12 +179,12 @@ onMounted(() => {
 
     <section class="card dist-card">
       <header class="dist-head">
-        <strong>基金涨跌分布</strong>
-        <span v-if="overview">更新：{{ overview.updateTime }}</span>
+        <strong>涨跌分布</strong>
+        <span v-if="overview">{{ overview.updateTime }}</span>
       </header>
 
       <div v-if="overviewLoading" class="loading-wrap">
-        <van-loading size="22" />
+        <van-loading size="22"/>
       </div>
 
       <template v-else-if="overview">
@@ -219,26 +219,26 @@ onMounted(() => {
     <section class="card sector-card">
       <header class="sector-head">
         <strong>板块总览</strong>
-        <van-icon name="arrow" size="18" color="#9ca2b8" />
+        <van-icon name="arrow" size="18" color="#9ca2b8"/>
       </header>
 
       <div v-if="sectorsLoading" class="loading-wrap">
-        <van-loading size="22" />
+        <van-loading size="22"/>
       </div>
 
       <div v-else>
         <article v-for="item in sectors" :key="item.code" class="sector-item" @click="toSector(item.name)">
-          <div class="left">
+          <div class="sector-left">
             <strong>{{ item.name }}</strong>
             <span>{{ item.count }}只基金</span>
           </div>
 
-          <div class="middle" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ item.streak }}</div>
+          <div class="sector-middle" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ item.streak }}</div>
 
-          <div class="right" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ formatPercent(item.dayReturn) }}</div>
+          <div class="sector-right" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ formatPercent(item.dayReturn) }}</div>
         </article>
 
-        <van-empty v-if="sectors.length === 0" description="暂无板块数据" />
+        <van-empty v-if="sectors.length === 0" description="暂无板块数据"/>
       </div>
     </section>
   </div>
@@ -247,14 +247,9 @@ onMounted(() => {
 <style scoped>
 .market-page {
   padding: 0;
+  padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
   overflow-x: hidden;
   touch-action: pan-y;
-}
-
-.indices-card,
-.dist-card,
-.sector-card {
-  margin: 0 12px;
 }
 
 .dist-card,
@@ -268,7 +263,8 @@ onMounted(() => {
 
 .indices-scroll {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  justify-content: center;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -278,10 +274,14 @@ onMounted(() => {
 }
 
 .index-item {
-  min-width: 168px;
+  min-width: 80px;
   background: #eef8f3;
   border-radius: 10px;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .index-item.up {
@@ -293,22 +293,25 @@ onMounted(() => {
 }
 
 .index-name {
-  font-size: 1rem;
+  font-size: 0.6rem;
   color: #40495f;
 }
 
 .index-current {
   display: block;
   margin-top: 4px;
-  font-size: 1.625rem;
+  font-size: 0.7rem;
   line-height: 1;
 }
 
 .index-change {
   margin-top: 6px;
   display: flex;
-  gap: 10px;
-  font-size: 1rem;
+  justify-content: space-around;
+  align-items: center;
+  width: 100%;
+  gap: 0;
+  font-size: 0.6rem;
   font-weight: 600;
 }
 
@@ -333,7 +336,7 @@ onMounted(() => {
 }
 
 .dist-head strong {
-  font-size: 1.5rem;
+  font-size: 1rem;
 }
 
 .dist-head span {
@@ -389,29 +392,36 @@ onMounted(() => {
 .pk-wrap {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 10px;
+  grid-template-columns: max-content clamp(200px, 38vw, 200px) max-content;
+  justify-content: center;
+  gap: 6px;
   align-items: center;
 }
 
 .pk-side {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.9375rem;
+  gap: 4px;
+  font-size: 0.75rem;
   color: #4d566f;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  line-height: 1;
 }
 
 .pk-side.left strong {
   color: #12a761;
+  font-size: 0.75rem;
 }
 
 .pk-side.right strong {
   color: #f05158;
+  font-size: 0.75rem;
 }
 
 .pk-track {
   height: 14px;
+  min-width: 0;
   border-radius: 999px;
   overflow: hidden;
   display: flex;
@@ -443,7 +453,7 @@ onMounted(() => {
 }
 
 .sector-head strong {
-  font-size: 2.125rem;
+  font-size: 1rem;
 }
 
 .sector-item {
@@ -460,25 +470,25 @@ onMounted(() => {
   border-bottom: 0;
 }
 
-.left {
+.sector-left {
   display: flex;
   flex-direction: column;
 }
 
-.left strong {
-  font-size: 1.25rem;
+.sector-left strong {
+  font-size: 0.9rem;
 }
 
-.left span {
-  font-size: 0.875rem;
+.sector-left span {
+  font-size: 0.7rem;
   color: #8a91a7;
   margin-top: 2px;
 }
 
-.middle,
-.right {
-  font-size: 1rem;
-  font-weight: 600;
+.sector-middle,
+.sector-right {
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .loading-wrap {
@@ -500,5 +510,3 @@ onMounted(() => {
   border-radius: 0 !important;
 }
 </style>
-
-
