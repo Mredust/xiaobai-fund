@@ -1,13 +1,14 @@
 ﻿<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import FundSnapshotCard from '../components/FundSnapshotCard.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import FundSnapshotCard from './components/FundSnapshotCard.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
 
 const route = useRoute()
+const router = useRouter()
 const fundStore = useFundStore()
 
 const loading = ref(false)
@@ -42,7 +43,7 @@ const dateText = computed(() => {
 })
 
 const loadDetail = async () => {
-  // 加载基金详情，渲染交易记录头部。
+  // 请求基金详情，供定投页面展示。
   if (!code.value) {
     detail.value = null
     return
@@ -59,10 +60,15 @@ const loadDetail = async () => {
   }
 }
 
+const openPlanSetting = () => {
+  // 跳转定投计划设置页。
+  router.push(`/fund/${code.value}/sip-plan`)
+}
+
 watch(
   () => code.value,
   () => {
-    // 基金代码变化时重新拉取详情。
+    // 基金代码变化时重新拉取详情数据。
     void loadDetail()
   },
   { immediate: true }
@@ -70,8 +76,8 @@ watch(
 </script>
 
 <template>
-  <div class="page trade-record-page">
-    <BaseTopNav title="交易记录" />
+  <div class="page sip-page">
+    <BaseTopNav title="定投" />
 
     <section v-if="loading" class="card loading-wrap">
       <van-loading size="28" />
@@ -88,15 +94,19 @@ watch(
         show-position
       />
 
-      <section class="card empty-card">
-        <van-empty description="暂无交易记录" />
+      <section class="card empty-plan-card">
+        <span>暂无定投计划</span>
+      </section>
+
+      <section class="bottom-wrap">
+        <van-button block round type="primary" color="#4b6bde" @click="openPlanSetting">添加定投计划</van-button>
       </section>
     </template>
   </div>
 </template>
 
 <style scoped>
-.trade-record-page {
+.sip-page {
   padding-bottom: 20px;
 }
 
@@ -107,7 +117,19 @@ watch(
   align-items: center;
 }
 
-.empty-card {
+.empty-plan-card {
   margin-top: 10px;
+  min-height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #c6cad6;
+  font-size: 1.375rem;
+}
+
+.bottom-wrap {
+  margin-top: 12px;
 }
 </style>
+
+

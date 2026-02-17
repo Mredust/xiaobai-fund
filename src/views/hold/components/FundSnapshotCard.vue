@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
-import type { PositionInfo } from '../stores/funds'
+import type { PositionInfo } from '@/stores/funds'
 
 const props = defineProps<{
   name: string
@@ -108,4 +108,5 @@ const changeText = computed(() => {
   line-height: 1.1;
 }
 </style>
+
 

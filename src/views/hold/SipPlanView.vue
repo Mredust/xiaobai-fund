@@ -2,10 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import FundSnapshotCard from '../components/FundSnapshotCard.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import FundSnapshotCard from './components/FundSnapshotCard.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
+import { formatYearMonthDayZh } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -71,10 +72,8 @@ const timeColumns = computed(() => {
   const rows = Array.from({ length: 10 }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() + 3 + index * 7)
-    const year = date.getFullYear()
-    const month = `${date.getMonth() + 1}`.padStart(2, '0')
-    const day = `${date.getDate()}`.padStart(2, '0')
-    return { text: `${year}年${month}月${day}日`, value: `${year}年${month}月${day}日` }
+    const text = formatYearMonthDayZh(date)
+    return { text, value: text }
   })
   return [rows]
 })
@@ -274,4 +273,5 @@ watch(
   margin-top: 12px;
 }
 </style>
+
 

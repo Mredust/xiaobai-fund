@@ -1,9 +1,10 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import TagStrip from '../components/TagStrip.vue'
-import { useTagStore } from '../stores/tags'
-import { useFundStore } from '../stores/funds'
+import TagStrip from '@/components/TagStrip.vue'
+import { useTagStore } from '@/stores/tags'
+import { useFundStore } from '@/stores/funds'
+import { formatPercent } from '@/utils/format'
 
 const router = useRouter()
 const tagStore = useTagStore()
@@ -16,11 +17,6 @@ const watchFunds = computed(() => {
   // 自选列表按当前自选标签读取，标签之间互不共用数据。
   return fundStore.getWatchFundsByTag(activeWatchTagId.value)
 })
-
-const formatRate = (value: number) => {
-  // 统一输出涨跌幅带符号文本。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
 
 const setActiveTag = (id: number) => {
   // 自选页标签切换。
@@ -73,10 +69,10 @@ const toDetail = (code: string) => {
         </div>
 
         <div class="right">
-          <span class="change" :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ formatRate(item.dailyChange) }}</span>
+          <span class="change" :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ formatPercent(item.dailyChange) }}</span>
           <div class="sub">
             <span>净值 {{ item.nav.toFixed(4) }}</span>
-            <span :class="item.boardChange >= 0 ? 'up' : 'down'">{{ item.boardName }} {{ formatRate(item.boardChange) }}</span>
+            <span :class="item.boardChange >= 0 ? 'up' : 'down'">{{ item.boardName }} {{ formatPercent(item.boardChange) }}</span>
           </div>
         </div>
       </article>
@@ -183,4 +179,5 @@ const toDetail = (code: string) => {
   color: #7d8397;
 }
 </style>
+
 

@@ -1,8 +1,8 @@
 ﻿<script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import { useFundStore } from '@/stores/funds'
 
 const router = useRouter()
 const fundStore = useFundStore()
@@ -76,4 +76,5 @@ const onManual = () => {
   font-size: 1.125rem;
 }
 </style>
+
 

@@ -3,9 +3,9 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import draggable from 'vuedraggable'
 import { showConfirmDialog, showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import { useTagStore, type TagItem } from '../stores/tags'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import { useTagStore, type TagItem } from '@/stores/tags'
+import { useFundStore } from '@/stores/funds'
 
 const route = useRoute()
 const tagStore = useTagStore()
@@ -310,4 +310,5 @@ const clearTag = async (item: TagItem) => {
   padding: 12px 14px 8px;
 }
 </style>
+
 

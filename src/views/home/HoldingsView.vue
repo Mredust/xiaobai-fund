@@ -1,9 +1,12 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import TagStrip from '../components/TagStrip.vue'
-import { useTagStore } from '../stores/tags'
-import { useFundStore, type WatchFundItem } from '../stores/funds'
+import TagStrip from '@/components/TagStrip.vue'
+import { buildMiniTrendPath } from '@/utils/chart'
+import { formatPercent, formatSignedNumber } from '@/utils/format'
+import { toSafeNumber } from '@/utils/number'
+import { useTagStore } from '@/stores/tags'
+import { useFundStore } from '@/stores/funds'
 
 interface SummaryCardItem {
   tagId: number
@@ -41,46 +44,6 @@ const activeFunds = computed(() => {
   return fundStore.getHoldingFundsByTag(activeTagId.value)
 })
 
-const toNumber = (value: string | number | undefined) => {
-  // 将持仓字段转换为数值，无法转换时返回 0。
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : 0
-}
-
-const formatSigned = (value: number) => {
-  // 数值统一带正负号文本输出。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`
-}
-
-const formatPercent = (value: number) => {
-  // 百分比统一带正负号文本输出。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
-const buildTrendPath = (tagId: number, funds: WatchFundItem[]) => {
-  // 根据标签和基金数据生成稳定的迷你走势图路径。
-  const width = 168
-  const height = 54
-  const points = Array.from({ length: 42 }, (_, index) => {
-    const base = funds.reduce((sum, item) => sum + item.dailyChange * 0.8 + item.nav * 0.05, tagId * 0.12)
-    const waveA = Math.sin((index + tagId) * 0.35) * 1.2
-    const waveB = Math.cos((index + base) * 0.17) * 0.7
-    return base * 0.03 + waveA + waveB
-  })
-
-  const min = Math.min(...points)
-  const max = Math.max(...points)
-  const range = max - min || 1
-
-  return points
-    .map((value, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * width
-      const y = ((max - value) / range) * height
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
 const currentScopeFunds = computed(() => {
   // 顶部资产汇总：账户汇总模式统计全部分类标签，否则统计当前标签。
   if (!isAccountSummaryTab.value) {
@@ -92,21 +55,21 @@ const currentScopeFunds = computed(() => {
 
 const summaryAsset = computed(() => {
   // 汇总作用域下的账户资产。
-  return currentScopeFunds.value.reduce((sum, item) => sum + toNumber(fundStore.positionByCode[item.code]?.amount), 0)
+  return currentScopeFunds.value.reduce((sum, item) => sum + toSafeNumber(fundStore.positionByCode[item.code]?.amount), 0)
 })
 
 const summaryDayProfit = computed(() => {
   // 汇总作用域下的当日收益。
-  return currentScopeFunds.value.reduce((sum, item) => sum + toNumber(fundStore.positionByCode[item.code]?.yesterdayProfit), 0)
+  return currentScopeFunds.value.reduce((sum, item) => sum + toSafeNumber(fundStore.positionByCode[item.code]?.yesterdayProfit), 0)
 })
 
 const accountSummaryCards = computed<SummaryCardItem[]>(() => {
   // 构建账户汇总模式下的分类卡片数据。
   return summaryTagList.value.map((tag) => {
     const funds = fundStore.getHoldingFundsByTag(tag.id)
-    const asset = funds.reduce((sum, item) => sum + toNumber(fundStore.positionByCode[item.code]?.amount), 0)
-    const holdingProfit = funds.reduce((sum, item) => sum + toNumber(fundStore.positionByCode[item.code]?.profit), 0)
-    const dayProfit = funds.reduce((sum, item) => sum + toNumber(fundStore.positionByCode[item.code]?.yesterdayProfit), 0)
+    const asset = funds.reduce((sum, item) => sum + toSafeNumber(fundStore.positionByCode[item.code]?.amount), 0)
+    const holdingProfit = funds.reduce((sum, item) => sum + toSafeNumber(fundStore.positionByCode[item.code]?.profit), 0)
+    const dayProfit = funds.reduce((sum, item) => sum + toSafeNumber(fundStore.positionByCode[item.code]?.yesterdayProfit), 0)
     const upCount = funds.filter((item) => item.dailyChange > 0).length
     const downCount = funds.filter((item) => item.dailyChange < 0).length
 
@@ -120,7 +83,7 @@ const accountSummaryCards = computed<SummaryCardItem[]>(() => {
       holdingProfitRate: asset > 0 ? (holdingProfit / asset) * 100 : 0,
       dayProfit,
       dayProfitRate: asset > 0 ? (dayProfit / asset) * 100 : 0,
-      trendPath: buildTrendPath(tag.id, funds)
+      trendPath: buildMiniTrendPath(tag.id, funds)
     }
   })
 })
@@ -162,7 +125,7 @@ const openCategoryTag = (tagId: number) => {
         </div>
         <div class="summary-col right">
           <span class="summary-label">当日总收益</span>
-          <strong class="summary-value" :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSigned(summaryDayProfit) }}</strong>
+          <strong class="summary-value" :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
         </div>
       </div>
     </section>
@@ -189,7 +152,7 @@ const openCategoryTag = (tagId: number) => {
             <div class="metric-line">
               <span>持有收益</span>
               <div class="profit-wrap">
-                <strong :class="item.holdingProfit >= 0 ? 'up' : 'down'">{{ formatSigned(item.holdingProfit) }}</strong>
+                <strong :class="item.holdingProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(item.holdingProfit) }}</strong>
                 <small>{{ formatPercent(item.holdingProfitRate) }}</small>
               </div>
             </div>
@@ -204,7 +167,7 @@ const openCategoryTag = (tagId: number) => {
             <div class="day-wrap">
               <span>当日收益</span>
               <div class="profit-wrap">
-                <strong :class="item.dayProfit >= 0 ? 'up' : 'down'">{{ formatSigned(item.dayProfit) }}</strong>
+                <strong :class="item.dayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(item.dayProfit) }}</strong>
                 <small>{{ formatPercent(item.dayProfitRate) }}</small>
               </div>
             </div>
@@ -507,4 +470,5 @@ const openCategoryTag = (tagId: number) => {
   border-radius: 0 !important;
 }
 </style>
+
 

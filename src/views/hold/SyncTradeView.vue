@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import FundSnapshotCard from '../components/FundSnapshotCard.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import FundSnapshotCard from './components/FundSnapshotCard.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { formatMonthDayWeekZh } from '@/utils/format'
 
 const route = useRoute()
 
@@ -57,10 +58,7 @@ const dateOptions = computed(() => {
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date()
     date.setDate(date.getDate() - (6 - index))
-    const month = `${date.getMonth() + 1}`.padStart(2, '0')
-    const day = `${date.getDate()}`.padStart(2, '0')
-    const weekNames = ['日', '一', '二', '三', '四', '五', '六']
-    return `${month}月${day}日(周${weekNames[date.getDay()]})`
+    return formatMonthDayWeekZh(date)
   })
 })
 
@@ -235,4 +233,5 @@ watch(
   margin-top: 16px;
 }
 </style>
+
 

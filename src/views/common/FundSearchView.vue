@@ -2,10 +2,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import { searchFunds, type SearchFundResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
-import { useTagStore } from '../stores/tags'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import { searchFunds, type SearchFundResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
+import { useTagStore } from '@/stores/tags'
 
 const route = useRoute()
 const router = useRouter()
@@ -405,4 +405,5 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 </style>
+
 

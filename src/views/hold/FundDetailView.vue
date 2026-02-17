@@ -2,10 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import TrendChart from '../components/TrendChart.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import TrendChart from './components/TrendChart.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
+import { formatPercent, formatYmd } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,20 +49,6 @@ const moreActions = computed(() => {
   ]
 })
 
-const formatPercent = (value: number) => {
-  // 百分比展示统一加正负号。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
-const formatDate = (timestamp: number) => {
-  // 将时间戳转换为 yyyy-mm-dd 文本。
-  const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 const trendByPeriod = computed(() => {
   // 根据周期筛选走势图数据点。
   const list = detail.value?.historyTrend || []
@@ -94,7 +81,7 @@ const tenTradeRows = computed(() => {
       const prev = array[index - 1]
       const change = prev && prev.y !== 0 ? ((item.y - prev.y) / prev.y) * 100 : item.equityReturn || 0
       return {
-        date: formatDate(item.x),
+        date: formatYmd(new Date(item.x)),
         nav: item.y,
         change
       }
@@ -604,4 +591,5 @@ watch(
   cursor: pointer;
 }
 </style>
+
 

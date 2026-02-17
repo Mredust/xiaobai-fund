@@ -1,9 +1,10 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import TrendChart from '../components/TrendChart.vue'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import TrendChart from './components/TrendChart.vue'
+import { useFundStore } from '@/stores/funds'
+import { formatPercent } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,11 +28,6 @@ const sector = computed(() => {
     }
   )
 })
-
-const formatRate = (value: number) => {
-  // 板块和基金涨跌幅统一格式化。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
 
 const mockTrend = (base: number, size: number) => {
   // 使用板块涨跌幅构造示意折线，保证页面可视化结构完整。
@@ -89,7 +85,7 @@ const toFundDetail = (code: string) => {
 
       <div class="sector-meta">
         <span>02-13</span>
-        <strong>{{ sector.name }}板块 {{ formatRate(sector.trend) }}</strong>
+        <strong>{{ sector.name }}板块 {{ formatPercent(sector.trend) }}</strong>
       </div>
 
       <TrendChart :points="activeTab === 'intraday' ? intradayPoints : historyPoints" color="#e25b6f" />
@@ -113,8 +109,8 @@ const toFundDetail = (code: string) => {
           <span>{{ item.code }}</span>
         </div>
         <div class="right">
-          <strong :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ formatRate(item.dailyChange) }}</strong>
-          <strong :class="item.monthChange >= 0 ? 'up' : 'down'">{{ formatRate(item.monthChange) }}</strong>
+          <strong :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ formatPercent(item.dailyChange) }}</strong>
+          <strong :class="item.monthChange >= 0 ? 'up' : 'down'">{{ formatPercent(item.monthChange) }}</strong>
         </div>
       </article>
 
@@ -238,4 +234,5 @@ const toFundDetail = (code: string) => {
   font-size: 1rem;
 }
 </style>
+
 

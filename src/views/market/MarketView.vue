@@ -1,7 +1,8 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useFundStore } from '../stores/funds'
+import { useFundStore } from '@/stores/funds'
+import { formatPercent, formatSignedNumber } from '@/utils/format'
 import {
   fetchMarketIndicesFast,
   fetchMarketOverview,
@@ -10,7 +11,7 @@ import {
   type MarketIndexSimple,
   type MarketOverview,
   type SectorInfo
-} from '../api/marketApi'
+} from '@/api/marketApi'
 
 const router = useRouter()
 const fundStore = useFundStore()
@@ -67,16 +68,6 @@ const upPercent = computed(() => {
   }
   return (overview.value.totalUp / totalPkCount.value) * 100
 })
-
-const formatRate = (value: number) => {
-  // 统一格式化涨跌幅。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
-const formatDelta = (value: number) => {
-  // 统一格式化涨跌点位。
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`
-}
 
 const distributionClass = (item: FundDistribution) => {
   // 根据区间为柱图分配红绿灰颜色。
@@ -179,8 +170,8 @@ onMounted(() => {
           <div class="index-name">{{ item.name }}</div>
           <strong class="index-current">{{ item.current.toFixed(2) }}</strong>
           <div class="index-change">
-            <span>{{ formatDelta(item.change) }}</span>
-            <span>{{ formatRate(item.changePercent) }}</span>
+            <span>{{ formatSignedNumber(item.change) }}</span>
+            <span>{{ formatPercent(item.changePercent) }}</span>
           </div>
         </article>
       </div>
@@ -244,7 +235,7 @@ onMounted(() => {
 
           <div class="middle" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ item.streak }}</div>
 
-          <div class="right" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ formatRate(item.dayReturn) }}</div>
+          <div class="right" :class="item.dayReturn >= 0 ? 'up' : 'down'">{{ formatPercent(item.dayReturn) }}</div>
         </article>
 
         <van-empty v-if="sectors.length === 0" description="暂无板块数据" />
@@ -509,4 +500,5 @@ onMounted(() => {
   border-radius: 0 !important;
 }
 </style>
+
 

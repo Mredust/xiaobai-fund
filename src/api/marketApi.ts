@@ -1,31 +1,5 @@
-﻿export interface MarketIndexSimple {
-  code: string
-  name: string
-  current: number
-  change: number
-  changePercent: number
-}
-
-export interface FundDistribution {
-  range: string
-  count: number
-}
-
-export interface MarketOverview {
-  updateTime: string
-  totalUp: number
-  totalDown: number
-  totalFlat: number
-  distribution: FundDistribution[]
-}
-
-export interface SectorInfo {
-  code: string
-  name: string
-  dayReturn: number
-  count: number
-  streak: string
-}
+﻿import type { FundDistribution, MarketIndexSimple, MarketOverview, SectorInfo } from '@/types/market'
+export type { FundDistribution, MarketIndexSimple, MarketOverview, SectorInfo } from '@/types/market'
 
 interface CacheEntry<T> {
   value: T
@@ -74,6 +48,10 @@ const formatNow = () => {
   return `${year}/${month}/${day} ${hour}:${minute}`
 }
 
+/**
+ * 获取顶部指数简表。
+ * 用途：为行情页顶部横向指数区域提供实时指数点位与涨跌数据。
+ */
 export const fetchMarketIndicesFast = async () => {
   // 使用与 fund-app2 相同的 push2 指数接口。
   const cacheKey = 'market_indices_fast'
@@ -138,6 +116,10 @@ const parseDistributionIndex = (change: number) => {
   return 8
 }
 
+/**
+ * 获取涨跌分布与 PK 概览数据。
+ * 用途：驱动行情页中部的分布柱图和涨跌家数对比进度条。
+ */
 export const fetchMarketOverview = async () => {
   // 使用 fund-app2 同款 rankhandler JSONP 数据源获取涨跌分布。
   const cacheKey = 'market_overview_fast'
@@ -257,6 +239,10 @@ const buildStreak = (dayReturn: number) => {
   return '持平'
 }
 
+/**
+ * 获取板块涨跌列表。
+ * 用途：展示行情页下方板块总览列表以及跳转板块详情入口。
+ */
 export const fetchSectorFunds = async () => {
   // 使用 fund-app2 同源 push2 行业板块接口。
   const cacheKey = 'market_sector_fast'
@@ -296,3 +282,4 @@ export const fetchSectorFunds = async () => {
     return []
   }
 }
+

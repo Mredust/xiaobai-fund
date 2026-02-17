@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import { useFundStore } from '../stores/funds'
-import { useTagStore } from '../stores/tags'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import { useFundStore } from '@/stores/funds'
+import { useTagStore } from '@/stores/tags'
+import { formatSignedNumber } from '@/utils/format'
 
 const router = useRouter()
 const fundStore = useFundStore()
@@ -123,7 +124,7 @@ const finishImport = () => {
           </div>
           <div class="value-col">
             <span>持有收益</span>
-            <strong :class="item.profit >= 0 ? 'up' : 'down'">{{ item.profit >= 0 ? '+' : '' }}{{ item.profit.toFixed(2) }}</strong>
+            <strong :class="item.profit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(item.profit) }}</strong>
           </div>
           <button type="button" class="remove-btn" @click="removeRecord(item.id, $event)">
             <van-icon name="cross" size="14" />
@@ -308,4 +309,5 @@ const finishImport = () => {
   margin-bottom: 8px;
 }
 </style>
+
 

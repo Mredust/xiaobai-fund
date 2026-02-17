@@ -1,34 +1,5 @@
-﻿export interface SearchFundResult {
-  code: string
-  name: string
-}
-
-export interface FundHoldingItem {
-  code: string
-  name: string
-  weight: string
-  change: number | null
-}
-
-export interface FundTrendPoint {
-  x: number
-  y: number
-  equityReturn: number | null
-}
-
-export interface FundDetailResult {
-  code: string
-  name: string
-  dwjz: number
-  gsz: number
-  gztime: string
-  gszzl: number
-  yearChange: number
-  heatRank: number
-  heatTotal: number
-  holdings: FundHoldingItem[]
-  historyTrend: FundTrendPoint[]
-}
+﻿import type { FundDetailResult, FundHoldingItem, FundTrendPoint, SearchFundResult } from '@/types/fund'
+export type { FundDetailResult, FundHoldingItem, FundTrendPoint, SearchFundResult } from '@/types/fund'
 
 interface EastSearchItem {
   CODE?: string
@@ -170,6 +141,10 @@ const buildYearChange = (historyTrend: FundTrendPoint[]) => {
   return ((last.y - first.y) / first.y) * 100
 }
 
+/**
+ * 搜索基金列表。
+ * 用途：根据基金名称/代码关键字获取候选基金，用于基金搜索页和选择转入基金场景。
+ */
 export const searchFunds = async (keyword: string) => {
   // 调用 real-time-fund 使用的东方财富 JSONP 搜索接口。
   const value = String(keyword || '').trim()
@@ -236,6 +211,10 @@ export const searchFunds = async (keyword: string) => {
   }
 }
 
+/**
+ * 获取基金详情数据。
+ * 用途：加载基金详情页、持仓编辑页等场景所需的估值、持仓、历史走势数据。
+ */
 export const fetchFundData = async (code: string) => {
   // 拉取基金估值 + 持仓 + 历史净值，数据结构对齐 real-time-fund 的接口能力。
   const fundCode = String(code || '').trim()
@@ -333,3 +312,4 @@ export const fetchFundData = async (code: string) => {
     historyTrend
   } as FundDetailResult
 }
+

@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
+import { formatMonthDayZh, formatYmd } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,10 +21,7 @@ const code = computed(() => String(route.params.code || '').trim())
 
 const transferDate = computed(() => {
   // 默认使用当天作为转换确认日期展示。
-  const date = new Date()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${month}月${day}日`
+  return formatMonthDayZh(new Date())
 })
 
 const targetFund = computed(() => {
@@ -48,14 +46,6 @@ const addBusinessDays = (start: Date, days: number) => {
     }
   }
   return date
-}
-
-const formatYmd = (date: Date) => {
-  // 格式化日期为 yyyy-mm-dd 文本。
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 const resolveConvertRule = () => {
@@ -253,4 +243,5 @@ watch(
   font-size: 0.875rem;
 }
 </style>
+
 

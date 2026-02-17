@@ -1,0 +1,18 @@
+.page {
+  min-height: calc(100vh - 3.5rem);
+  padding: 0 0.75rem 0.75rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0.375rem 1rem rgb(14 27 72 / 5%);
+}
+
+.up {
+  color: var(--up);
+}
+
+.down {
+  color: var(--down);
+}

@@ -2,10 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
-import BaseTopNav from '../components/BaseTopNav.vue'
-import FundSnapshotCard from '../components/FundSnapshotCard.vue'
-import { fetchFundData, type FundDetailResult } from '../api/fundApi'
-import { useFundStore } from '../stores/funds'
+import BaseTopNav from '@/components/BaseTopNav.vue'
+import FundSnapshotCard from './components/FundSnapshotCard.vue'
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,4 +186,5 @@ watch(
   margin-top: 12px;
 }
 </style>
+
 
