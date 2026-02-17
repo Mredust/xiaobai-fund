@@ -194,8 +194,7 @@ const openCategoryTag = (tagId: number) => {
 
       <div class="funds-header">
         <span>基金名称</span>
-        <span>关联板块</span>
-        <span>最新收益</span>
+        <span>当日收益</span>
         <span>持有收益</span>
       </div>
 
@@ -396,7 +395,7 @@ const openCategoryTag = (tagId: number) => {
 }
 
 .funds-overview .title {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 

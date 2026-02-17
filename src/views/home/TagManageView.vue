@@ -108,8 +108,19 @@ const confirmEdit = () => {
   return true
 }
 
-const removeTag = (item: TagItem) => {
-  // 通过左侧减号移除当前场景标签。
+const removeTag = async (item: TagItem) => {
+  // 通过左侧减号移除当前场景标签，移除前进行安全确认。
+  try {
+    await showConfirmDialog({
+      title: '安全提示',
+      message: '此账户下的持有基金也会删除，\n您确定删除此账户吗？',
+      cancelButtonText: '取消',
+      confirmButtonText: '确定删除'
+    })
+  } catch {
+    return
+  }
+
   const removed =
     manageScene.value === 'watchlist'
       ? (() => {
@@ -245,18 +256,19 @@ const clearTag = async (item: TagItem) => {
 
 .list-header > span:nth-child(1) {
   flex: 1;
-  padding-left: 40px;
+  padding-left: 46px;
+  text-align: left;
 }
 
 .list-header > span {
   width: 52px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .row-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   border-top: 1px solid var(--line);
   min-height: 62px;
 }
@@ -267,13 +279,25 @@ const clearTag = async (item: TagItem) => {
   align-items: center;
 }
 
+.left {
+  flex: 1;
+  min-width: 0;
+}
+
 .name {
   font-size: 1.1875rem;
   margin-left: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .right {
-  gap: 4px;
+  width: 156px;
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  justify-items: center;
+  align-items: center;
 }
 
 .icon-btn {

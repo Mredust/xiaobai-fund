@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
-import { useProfileStore } from '@/stores/profile'
+import {useRouter} from 'vue-router'
+import {showToast} from 'vant'
+import {useProfileStore} from '@/stores/profile'
 
 interface ProfileItem {
   id: number
@@ -13,8 +13,8 @@ const router = useRouter()
 const profileStore = useProfileStore()
 
 const functionItems: ProfileItem[] = [
-  { id: 1, title: '盈亏分析', icon: 'bar-chart-o' },
-  { id: 2, title: '主题设置', icon: 'setting-o' }
+  {id: 1, title: '盈亏分析', icon: 'bar-chart-o'},
+  {id: 2, title: '主题设置', icon: 'setting-o'}
 ]
 
 const toProfileInfo = () => {
@@ -37,7 +37,7 @@ const onFunctionItemClick = () => {
   <div class="page profile-page">
     <div class="profile-scroll">
       <section class="user-section">
-        <van-image width="4.25rem" height="4.25rem" :src="profileStore.avatar" alt="头像" class="avatar" />
+        <van-image width="4.25rem" height="4.25rem" :src="profileStore.avatar" alt="头像" class="avatar"/>
 
         <div class="user-meta">
           <div class="name-row">
@@ -46,19 +46,19 @@ const onFunctionItemClick = () => {
         </div>
 
         <button type="button" class="profile-entry" @click="toProfileInfo">
-          <i class="entry-dot"></i>
-          <van-icon name="arrow" size="1.125rem" />
+          <van-icon name="arrow" size="1.125rem"/>
         </button>
       </section>
 
       <section class="group-card">
-        <button v-for="item in functionItems" :key="item.id" type="button" class="item-row" @click="onFunctionItemClick">
+        <button v-for="item in functionItems" :key="item.id" type="button" class="item-row"
+                @click="onFunctionItemClick">
           <div class="row-left">
-            <van-icon :name="item.icon" size="1.375rem" />
+            <van-icon :name="item.icon" size="1.375rem"/>
             <span>{{ item.title }}</span>
           </div>
           <div class="row-right">
-            <van-icon name="arrow" size="1rem" />
+            <van-icon name="arrow" size="1rem"/>
           </div>
         </button>
       </section>
@@ -66,11 +66,11 @@ const onFunctionItemClick = () => {
       <section class="single-card">
         <button type="button" class="item-row" @click="toFeedback">
           <div class="row-left">
-            <van-icon name="comment-o" size="1.375rem" />
+            <van-icon name="comment-o" size="1.375rem"/>
             <span>问题反馈</span>
           </div>
           <div class="row-right">
-            <van-icon name="arrow" size="1rem" />
+            <van-icon name="arrow" size="1rem"/>
           </div>
         </button>
       </section>
@@ -123,16 +123,6 @@ const onFunctionItemClick = () => {
   width: 1.75rem;
   height: 1.75rem;
   position: relative;
-}
-
-.entry-dot {
-  position: absolute;
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 50%;
-  background: #f34b5a;
-  right: 0.0625rem;
-  top: 0.125rem;
 }
 
 .group-card,
