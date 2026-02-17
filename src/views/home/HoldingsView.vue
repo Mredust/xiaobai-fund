@@ -1,12 +1,12 @@
 ﻿<script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import {computed} from 'vue'
+import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
-import { buildMiniTrendPath } from '@/utils/chart'
-import { formatPercent, formatSignedNumber } from '@/utils/format'
-import { toSafeNumber } from '@/utils/number'
-import { useTagStore } from '@/stores/tags'
-import { useFundStore } from '@/stores/funds'
+import {buildMiniTrendPath} from '@/utils/chart'
+import {formatPercent, formatSignedNumber} from '@/utils/format'
+import {toSafeNumber} from '@/utils/number'
+import {useTagStore} from '@/stores/tags'
+import {useFundStore} from '@/stores/funds'
 
 interface SummaryCardItem {
   tagId: number
@@ -34,23 +34,28 @@ const isAccountSummaryTab = computed(() => {
   return activeTag?.name === '账户汇总'
 })
 
+const isAllTab = computed(() => {
+  // 使用标签名称判断是否为“全部”模式，避免依赖固定 id。
+  const activeTag = tags.value.find((item) => item.id === activeTagId.value)
+  return activeTag?.name === '全部'
+})
+
 const summaryTagList = computed(() => {
   // 分类汇总卡片排除“账户汇总”和“全部”标签。
   return tags.value.filter((item) => item.name !== '账户汇总' && item.name !== '全部')
 })
 
-const activeFunds = computed(() => {
-  // 非账户汇总模式展示当前标签基金列表。
+const displayFunds = computed(() => {
+  // “账户汇总/全部”聚合其他所有标签，其余标签仅展示自身基金。
+  if (isAccountSummaryTab.value || isAllTab.value) {
+    return summaryTagList.value.flatMap((tag) => fundStore.getHoldingFundsByTag(tag.id))
+  }
   return fundStore.getHoldingFundsByTag(activeTagId.value)
 })
 
 const currentScopeFunds = computed(() => {
-  // 顶部资产汇总：账户汇总模式统计全部分类标签，否则统计当前标签。
-  if (!isAccountSummaryTab.value) {
-    return activeFunds.value
-  }
-
-  return summaryTagList.value.flatMap((tag) => fundStore.getHoldingFundsByTag(tag.id))
+  // 顶部资产汇总与当前列表展示范围保持一致。
+  return displayFunds.value
 })
 
 const summaryAsset = computed(() => {
@@ -88,6 +93,9 @@ const accountSummaryCards = computed<SummaryCardItem[]>(() => {
   })
 })
 
+const upCount = computed(() => displayFunds.value.filter((item) => item.dailyChange > 0).length)
+const downCount = computed(() => displayFunds.value.filter((item) => item.dailyChange < 0).length)
+
 const setActiveTag = (id: number) => {
   // 首页标签切换。
   tagStore.setHoldingActive(id)
@@ -117,7 +125,7 @@ const openCategoryTag = (tagId: number) => {
 <template>
   <div class="page holdings-page">
     <section class="holdings-top card">
-      <TagStrip :items="tags" :active-id="activeTagId" show-add @change="setActiveTag" @add="toTagManage" />
+      <TagStrip :items="tags" :active-id="activeTagId" show-add @change="setActiveTag" @add="toTagManage"/>
       <div class="summary-box">
         <div class="summary-col">
           <span class="summary-label">账户资产</span>
@@ -125,21 +133,23 @@ const openCategoryTag = (tagId: number) => {
         </div>
         <div class="summary-col right">
           <span class="summary-label">当日总收益</span>
-          <strong class="summary-value" :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
+          <strong class="summary-value"
+                  :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
         </div>
       </div>
     </section>
 
     <section v-if="isAccountSummaryTab" class="summary-list-wrap">
-      <article v-for="item in accountSummaryCards" :key="item.tagId" class="card summary-item" @click="openCategoryTag(item.tagId)">
+      <article v-for="item in accountSummaryCards" :key="item.tagId" class="card summary-item"
+               @click="openCategoryTag(item.tagId)">
         <div class="summary-item-top">
           <div class="tag-name">
-            <van-icon name="balance-list-o" size="18" color="#3f63d7" />
+            <van-icon name="balance-list-o" size="18" color="#3f63d7"/>
             <strong>{{ item.tagName }}</strong>
           </div>
           <div class="compare-metrics">
-            <span class="up">↑{{ item.upCount }}</span>
-            <span class="down">↓{{ item.downCount }}</span>
+            <span class="up">{{ item.upCount }}↑</span>
+            <span class="down">{{ item.downCount }}↓</span>
           </div>
         </div>
 
@@ -152,7 +162,9 @@ const openCategoryTag = (tagId: number) => {
             <div class="metric-line">
               <span>持有收益</span>
               <div class="profit-wrap">
-                <strong :class="item.holdingProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(item.holdingProfit) }}</strong>
+                <strong :class="item.holdingProfit >= 0 ? 'up' : 'down'">{{
+                    formatSignedNumber(item.holdingProfit)
+                  }}</strong>
                 <small>{{ formatPercent(item.holdingProfitRate) }}</small>
               </div>
             </div>
@@ -161,7 +173,7 @@ const openCategoryTag = (tagId: number) => {
           <div class="bottom-right">
             <div class="mini-trend">
               <svg viewBox="0 0 168 54" preserveAspectRatio="none">
-                <path :d="item.trendPath" stroke="#13a368" stroke-width="2" fill="none" />
+                <path :d="item.trendPath" stroke="#13a368" stroke-width="2" fill="none"/>
               </svg>
             </div>
             <div class="day-wrap">
@@ -177,35 +189,37 @@ const openCategoryTag = (tagId: number) => {
 
       <div v-if="accountSummaryCards.length === 0" class="card empty-wrap">
         <van-empty description="暂无分类标签">
-          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toTagManage">去添加分类标签</van-button>
+          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toTagManage">去添加分类标签
+          </van-button>
         </van-empty>
       </div>
     </section>
 
-    <section v-else class="funds-card card">
-      <div class="funds-overview">
+    <section v-if="!isAccountSummaryTab" class="funds-card card">
+      <div v-if="isAllTab" class="funds-overview">
         <span class="title">全部基金</span>
         <span class="stats">
-          <span>{{ activeFunds.length }}</span>
-          <span class="up">↑{{ activeFunds.filter((item) => item.dailyChange > 0).length }}</span>
-          <span class="down">↓{{ activeFunds.filter((item) => item.dailyChange < 0).length }}</span>
+          <span class="up">↑{{ upCount }}</span>
+          <span class="down">↓{{ downCount }}</span>
         </span>
       </div>
 
       <div class="funds-header">
         <span>基金名称</span>
         <span>当日收益</span>
+        <span>当日涨幅</span>
         <span>持有收益</span>
       </div>
 
-      <div v-if="activeFunds.length === 0" class="empty-wrap">
+      <div v-if="displayFunds.length === 0" class="empty-wrap">
         <van-empty description="暂无持仓基金">
-          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toImport">导入持仓看收益</van-button>
+          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toImport">导入持仓看收益
+          </van-button>
         </van-empty>
       </div>
 
       <div v-else class="fund-list">
-        <article v-for="item in activeFunds" :key="item.id" class="fund-item" @click="toFundDetail(item.code)">
+        <article v-for="item in displayFunds" :key="item.id" class="fund-item" @click="toFundDetail(item.code)">
           <div class="left">
             <strong>{{ item.name }}</strong>
             <span>{{ item.code }}</span>
@@ -232,7 +246,7 @@ const openCategoryTag = (tagId: number) => {
 
 .holdings-top {
   background: linear-gradient(180deg, #ffe389 0%, #f8dd6f 45%, #f7f2d8 100%);
-  padding: 10px 12px 12px;
+  padding: 10px 12px 0 12px;
   flex-shrink: 0;
 }
 
@@ -242,7 +256,7 @@ const openCategoryTag = (tagId: number) => {
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  border-radius: var(--radius-md);
+  border-radius: 10px 10px 0 0;
   background: rgb(255 255 255 / 55%);
 }
 
@@ -257,17 +271,19 @@ const openCategoryTag = (tagId: number) => {
 }
 
 .summary-label {
-  font-size: 0.8125rem;
+  font-size: 0.8rem;
   color: #6f6280;
+  opacity: 0.7;
+  margin-bottom: 5px;
 }
 
 .summary-value {
-  font-size: 2.125rem;
+  font-size: 1.5rem;
   line-height: 1;
+  font-weight: 4;
 }
 
 .summary-list-wrap {
-  margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -297,14 +313,15 @@ const openCategoryTag = (tagId: number) => {
 }
 
 .tag-name strong {
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .compare-metrics {
   display: flex;
   gap: 12px;
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
+  text-align: center;
 }
 
 .summary-item-bottom {
@@ -335,7 +352,7 @@ const openCategoryTag = (tagId: number) => {
 
 .metric-line strong,
 .day-wrap strong {
-  font-size: 2.125rem;
+  font-size: 1rem;
   line-height: 1;
 }
 
@@ -387,7 +404,7 @@ const openCategoryTag = (tagId: number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 .funds-overview {
@@ -409,10 +426,10 @@ const openCategoryTag = (tagId: number) => {
 
 .funds-header {
   color: var(--text-sub);
-  font-size: 0.875rem;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   height: 42px;
+  font-size: 0.7rem;
 }
 
 .funds-header > span {
@@ -441,7 +458,7 @@ const openCategoryTag = (tagId: number) => {
 .fund-item {
   display: flex;
   justify-content: space-between;
-  padding: 10px 2px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
 }
@@ -452,22 +469,20 @@ const openCategoryTag = (tagId: number) => {
   flex-direction: column;
 }
 
+.fund-item .left span,
+.fund-item .right span {
+  font-size: 0.7rem;
+}
+
 .fund-item .right {
   align-items: flex-end;
 }
 
 .fund-item strong {
-  font-size: 1rem;
+  font-size: 0.8rem;
 }
 
 .fund-item span {
   color: var(--text-sub);
-  font-size: 0.8125rem;
-}
-
-.holdings-page :deep(*) {
-  border-radius: 0 !important;
 }
 </style>
-
-
