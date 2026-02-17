@@ -21,8 +21,16 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 const historyList = computed(() => fundStore.searchHistory)
 const pickMode = computed(() => String(route.query.mode || ''))
-const isPickMode = computed(() => pickMode.value === 'pick' || pickMode.value === 'pick-convert')
+const isPickMode = computed(
+    () => pickMode.value === 'pick' || pickMode.value === 'pick-convert' || pickMode.value === 'pick-import'
+)
+const pickActionText = computed(() => (pickMode.value === 'pick-import' ? '导入' : '选择'))
+const importScene = computed<'watchlist' | 'holdings'>(() => {
+  // 导入选择场景由路由参数决定，默认导入持仓标签。
+  return route.query.scene === 'watchlist' ? 'watchlist' : 'holdings'
+})
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
+const activeHoldingTagId = computed(() => tagStore.activeHoldingTagId)
 
 const isWatchFund = (code: string) => {
   // 查询当前基金是否已在当前自选标签中，用于控制按钮文案。
@@ -62,12 +70,31 @@ const selectHistory = (item: SearchFundResult) => {
 const chooseFund = (item: SearchFundResult) => {
   // 选择模式下，根据来源场景回填目标数据。
   fundStore.recordSearchHistory(item)
+
   if (pickMode.value === 'pick') {
     fundStore.setManualImportFund({code: item.code, name: item.name})
-  } else {
-    fundStore.setConvertTargetFund({code: item.code, name: item.name})
+    router.back()
+    return
   }
-  router.back()
+
+  if (pickMode.value === 'pick-import') {
+    if (importScene.value === 'watchlist') {
+      const imported = fundStore.addWatchFund({code: item.code, name: item.name, tagId: activeWatchTagId.value})
+      showToast(imported ? '已添加导入' : '当前自选标签已存在该基金')
+    } else {
+      const exists = fundStore.getHoldingFundsByTag(activeHoldingTagId.value).some((fund) => fund.code === item.code)
+      fundStore.addHoldingFund({code: item.code, name: item.name, tagId: activeHoldingTagId.value})
+      showToast(exists ? '当前持仓标签已存在该基金' : '已添加导入')
+    }
+
+    router.back()
+    return
+  }
+
+  if (pickMode.value === 'pick-convert') {
+    fundStore.setConvertTargetFund({code: item.code, name: item.name})
+    router.back()
+  }
 }
 
 const openDetail = (item: SearchFundResult) => {
@@ -192,7 +219,7 @@ onBeforeUnmount(() => {
             >
               {{ isWatchFund(item.code) ? '已自选' : '加自选' }}
             </button>
-            <span v-else class="pick-text">选择</span>
+            <span v-else class="pick-text">{{ pickActionText }}</span>
           </article>
         </div>
       </template>

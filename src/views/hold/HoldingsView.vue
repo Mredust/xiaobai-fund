@@ -109,13 +109,13 @@ const toTagManage = () => {
 }
 
 const toImport = () => {
-  // 空状态按钮跳转到导入持仓页。
-  router.push('/import-holdings')
+  // 空状态按钮跳转到同步持仓页。
+  router.push('/import-holdings?scene=holdings')
 }
 
 const toSyncHolding = () => {
   // 列表底部“同步持仓”入口，复用导入持仓流程。
-  router.push('/import-holdings')
+  router.push('/import-holdings?scene=holdings')
 }
 
 const toFundDetail = (code: string) => {
@@ -229,7 +229,7 @@ watch(
       </div>
     </section>
 
-    <section v-if="!isAccountSummaryTab" class="funds-card card">
+    <section v-if="!isAccountSummaryTab && displayFunds.length > 0" class="funds-card card">
       <div class="summary-scroll-head">
         <div class="summary-box">
           <div class="summary-col">
@@ -259,14 +259,7 @@ watch(
         <span>持有收益</span>
       </div>
 
-      <div v-if="displayFunds.length === 0" class="empty-wrap">
-        <van-empty description="暂无持仓基金">
-          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toImport">导入持仓看收益
-          </van-button>
-        </van-empty>
-      </div>
-
-      <div v-else class="fund-list">
+      <div class="fund-list">
         <article v-for="item in displayFunds" :key="item.id" class="fund-item" @click="toFundDetail(item.code)">
           <div class="left">
             <strong>{{ item.name }}</strong>
@@ -284,6 +277,14 @@ watch(
           <van-icon name="plus" size="18"/>
           <span>同步持仓</span>
         </button>
+      </div>
+    </section>
+
+    <section v-if="!isAccountSummaryTab && displayFunds.length === 0" class="funds-card card funds-empty-card">
+      <div class="empty-wrap">
+        <van-empty description="当前标签暂无持仓基金">
+          <van-button round color="#f6c428" type="primary" class="import-btn" @click="toImport">同步持仓</van-button>
+        </van-empty>
       </div>
     </section>
   </div>
@@ -478,6 +479,12 @@ watch(
   overscroll-behavior-x: none;
 }
 
+.funds-empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .funds-overview,
 .funds-header {
   display: flex;
@@ -586,7 +593,6 @@ watch(
   cursor: pointer;
 }
 </style>
-
 
 
 

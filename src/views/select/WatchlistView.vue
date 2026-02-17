@@ -30,9 +30,9 @@ const toTagManage = () => {
   router.push('/tag-manage?scene=watchlist')
 }
 
-const toFundSearch = () => {
-  // 从自选页底部入口进入基金搜索，便于新增自选。
-  router.push('/fund-search')
+const toImportWatch = () => {
+  // 进入新增自选页，复用导入组件流程。
+  router.push('/import-holdings?scene=watchlist')
 }
 
 const toDetail = (code: string) => {
@@ -107,7 +107,13 @@ watch(
 
     <section class="card list-card">
       <van-pull-refresh v-model="refreshing" class="list-pull" @refresh="onRefresh">
-        <van-empty v-if="watchFunds.length === 0" description="当前标签暂无基金"/>
+        <div v-if="watchFunds.length === 0" class="empty-wrap">
+          <van-empty description="当前标签暂无基金">
+            <van-button round color="#f6c428" type="primary" class="empty-add-btn" @click="toImportWatch">
+              新增自选
+            </van-button>
+          </van-empty>
+        </div>
 
         <template v-else>
           <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
@@ -129,8 +135,8 @@ watch(
       </van-pull-refresh>
     </section>
 
-    <section class="add-watch-row">
-      <button type="button" class="add-watch-btn" @click="toFundSearch">
+    <section v-if="watchFunds.length > 0" class="add-watch-row">
+      <button type="button" class="add-watch-btn" @click="toImportWatch">
         <van-icon name="plus" size="18"/>
         <span>新增自选</span>
       </button>
@@ -201,6 +207,16 @@ watch(
 .list-pull {
   overflow-x: hidden;
   touch-action: pan-y;
+}
+
+.empty-wrap {
+  padding: 18px 0 8px;
+}
+
+.empty-add-btn {
+  width: 220px;
+  margin-top: 10px;
+  font-weight: 600;
 }
 
 .fund-row {
@@ -284,6 +300,5 @@ watch(
   touch-action: pan-y;
 }
 </style>
-
 
 

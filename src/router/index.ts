@@ -40,7 +40,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/import-holdings',
     name: 'import-holdings',
-    component: () => import('@/views/hold/ImportHoldingsView.vue')
+    component: () => import('@/views/common/ImportHoldingsView.vue')
   },
   {
     path: '/manual-holdings',
