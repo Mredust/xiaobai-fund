@@ -82,6 +82,11 @@ const onFunctionItemClick = () => {
 .profile-page {
   padding: 0;
   background: #f3f4f8;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .profile-scroll {
@@ -89,6 +94,9 @@ const onFunctionItemClick = () => {
   padding: 0.875rem 0.75rem 1rem;
   overflow-y: auto;
   overflow-x: hidden;
+  max-width: 100%;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .user-section {
@@ -128,6 +136,7 @@ const onFunctionItemClick = () => {
 .group-card,
 .single-card {
   margin-top: 0.875rem;
+  max-width: 100%;
   border-radius: 0.625rem;
   background: #fff;
   box-shadow: 0 0.1875rem 0.625rem rgb(15 27 67 / 4%);

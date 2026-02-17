@@ -114,7 +114,11 @@ const onRefresh = async () => {
 
 <style scoped>
 .watchlist-page {
+  width: 100%;
+  max-width: 100vw;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .watch-top {
@@ -155,7 +159,9 @@ const onRefresh = async () => {
 }
 
 .list-card {
+  max-width: 100%;
   padding: 2px 12px;
+  overflow-x: hidden;
 }
 
 .list-pull {
@@ -184,11 +190,15 @@ const onRefresh = async () => {
 
 .left {
   width: 52%;
+  min-width: 0;
 }
 
 .left strong {
   font-size: 0.8rem;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .left span {
@@ -231,6 +241,12 @@ const onRefresh = async () => {
 }
 
 .add-watch-row {
+  max-width: 100%;
   padding: 10px 12px 0;
+  overflow-x: hidden;
+}
+
+.watchlist-page :deep(.van-pull-refresh__track) {
+  touch-action: pan-y;
 }
 </style>
