@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import BaseTopNav from '@/components/BaseTopNav.vue'
+import { globalSettings } from '@/config/global'
 
-const issueUrl = 'https://github.com/Mredust/xiaobai-fund/issues'
+const issueUrl = globalSettings.issueSubmitUrl
 </script>
 
 <template>
