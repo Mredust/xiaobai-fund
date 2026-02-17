@@ -111,6 +111,11 @@ const toImport = () => {
   router.push('/import-holdings')
 }
 
+const toSyncHolding = () => {
+  // 列表底部“同步持仓”入口，复用导入持仓流程。
+  router.push('/import-holdings')
+}
+
 const toFundDetail = (code: string) => {
   // 点击基金行进入基金详情页。
   router.push(`/fund/${code}`)
@@ -230,6 +235,13 @@ const openCategoryTag = (tagId: number) => {
           </div>
         </article>
       </div>
+
+      <div class="funds-actions">
+        <button type="button" class="sync-btn" @click="toSyncHolding">
+          <van-icon name="plus" size="18"/>
+          <span>同步持仓</span>
+        </button>
+      </div>
     </section>
   </div>
 </template>
@@ -321,7 +333,15 @@ const openCategoryTag = (tagId: number) => {
   gap: 12px;
   font-size: 1rem;
   font-weight: 700;
-  text-align: center;
+  align-items: center;
+}
+
+.compare-metrics > span {
+  min-width: 3.25em;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
 }
 
 .summary-item-bottom {
@@ -391,8 +411,6 @@ const openCategoryTag = (tagId: number) => {
 }
 
 .funds-card {
-  margin-top: 10px;
-  padding: 10px 0 16px;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -484,5 +502,26 @@ const openCategoryTag = (tagId: number) => {
 
 .fund-item span {
   color: var(--text-sub);
+}
+
+.funds-actions {
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 12px 0;
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
+.sync-btn {
+  border: 0;
+  background: transparent;
+  color: #8a90a5;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  cursor: pointer;
 }
 </style>
