@@ -96,6 +96,16 @@ const routes: RouteRecordRaw[] = [
     path: '/sector/:name',
     name: 'sector-detail',
     component: () => import('@/views/hold/SectorDetailView.vue')
+  },
+  {
+    path: '/profile-info',
+    name: 'profile-info',
+    component: () => import('@/views/profile/ProfileInfoView.vue')
+  },
+  {
+    path: '/feedback',
+    name: 'feedback',
+    component: () => import('@/views/profile/FeedbackView.vue')
   }
 ]
 

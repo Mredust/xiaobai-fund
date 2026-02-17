@@ -43,8 +43,6 @@ const goBack = () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 8px;
-  margin: 10px 0 12px;
-  border-radius: var(--radius-md);
 }
 
 .top-nav-left,
@@ -58,7 +56,7 @@ const goBack = () => {
 .top-nav-title {
   flex: 1;
   text-align: center;
-  font-size: 1.375rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 1px;
 }
