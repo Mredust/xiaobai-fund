@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseTopNav from '@/components/BaseTopNav.vue'
-import TrendChart from './components/TrendChart.vue'
+import TrendChart from '@/views/fund/components/TrendChart.vue'
 import { useFundStore } from '@/stores/funds'
 import { formatPercent } from '@/utils/format'
 

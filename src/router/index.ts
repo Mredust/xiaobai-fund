@@ -13,12 +13,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'holdings',
         name: 'holdings',
-        component: () => import('@/views/home/HoldingsView.vue')
+        component: () => import('@/views/hold/HoldingsView.vue')
       },
       {
         path: 'watchlist',
         name: 'watchlist',
-        component: () => import('@/views/hold/WatchlistView.vue')
+        component: () => import('@/views/select/WatchlistView.vue')
       },
       {
         path: 'market',
@@ -28,24 +28,24 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'profile',
         name: 'profile',
-        component: () => import('@/views/profile/ProfileView.vue')
+        component: () => import('@/views/my/ProfileView.vue')
       }
     ]
   },
   {
     path: '/tag-manage',
     name: 'tag-manage',
-    component: () => import('@/views/home/TagManageView.vue')
+    component: () => import('@/views/hold/TagManageView.vue')
   },
   {
     path: '/import-holdings',
     name: 'import-holdings',
-    component: () => import('@/views/home/ImportHoldingsView.vue')
+    component: () => import('@/views/hold/ImportHoldingsView.vue')
   },
   {
     path: '/manual-holdings',
     name: 'manual-holdings',
-    component: () => import('@/views/home/ManualHoldingsView.vue')
+    component: () => import('@/views/hold/ManualHoldingsView.vue')
   },
   {
     path: '/fund-search',
@@ -55,57 +55,57 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/fund/:code',
     name: 'fund-detail',
-    component: () => import('@/views/hold/FundDetailView.vue')
+    component: () => import('@/views/fund/FundDetailView.vue')
   },
   {
     path: '/fund/:code/edit-holding',
     name: 'fund-edit-holding',
-    component: () => import('@/views/hold/EditHoldingView.vue')
+    component: () => import('@/views/fund/EditHoldingView.vue')
   },
   {
     path: '/fund/:code/sync-buy',
     name: 'fund-sync-buy',
-    component: () => import('@/views/hold/SyncTradeView.vue')
+    component: () => import('@/views/fund/SyncTradeView.vue')
   },
   {
     path: '/fund/:code/sync-sell',
     name: 'fund-sync-sell',
-    component: () => import('@/views/hold/SyncTradeView.vue')
+    component: () => import('@/views/fund/SyncTradeView.vue')
   },
   {
     path: '/fund/:code/sip',
     name: 'fund-sip',
-    component: () => import('@/views/hold/SipView.vue')
+    component: () => import('@/views/fund/SipView.vue')
   },
   {
     path: '/fund/:code/sip-plan',
     name: 'fund-sip-plan',
-    component: () => import('@/views/hold/SipPlanView.vue')
+    component: () => import('@/views/fund/SipPlanView.vue')
   },
   {
     path: '/fund/:code/convert',
     name: 'fund-convert',
-    component: () => import('@/views/hold/ConvertView.vue')
+    component: () => import('@/views/fund/ConvertView.vue')
   },
   {
     path: '/fund/:code/trade-record',
     name: 'fund-trade-record',
-    component: () => import('@/views/hold/TradeRecordView.vue')
+    component: () => import('@/views/fund/TradeRecordView.vue')
   },
   {
     path: '/sector/:name',
     name: 'sector-detail',
-    component: () => import('@/views/hold/SectorDetailView.vue')
+    component: () => import('@/views/select/SectorDetailView.vue')
   },
   {
     path: '/profile-info',
     name: 'profile-info',
-    component: () => import('@/views/profile/ProfileInfoView.vue')
+    component: () => import('@/views/my/ProfileInfoView.vue')
   },
   {
     path: '/feedback',
     name: 'feedback',
-    component: () => import('@/views/profile/FeedbackView.vue')
+    component: () => import('@/views/my/FeedbackView.vue')
   }
 ]
 
