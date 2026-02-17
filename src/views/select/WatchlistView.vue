@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {computed, ref} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
 import {useTagStore} from '@/stores/tags'
@@ -9,6 +9,8 @@ import {formatPercent} from '@/utils/format'
 const router = useRouter()
 const tagStore = useTagStore()
 const fundStore = useFundStore()
+const pageRef = ref<HTMLElement | null>(null)
+const watchTopRef = ref<HTMLElement | null>(null)
 
 const watchTags = computed(() => tagStore.watchTags)
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
@@ -40,11 +42,19 @@ const toDetail = (code: string) => {
 
 const refreshing = ref(false)
 
+const syncWatchTopHeight = () => {
+  // 固定头部高度变化时，实时同步列表顶部留白，避免内容被遮挡。
+  const height = watchTopRef.value?.offsetHeight || 0
+  if (pageRef.value) {
+    pageRef.value.style.setProperty('--watch-top-height', `${height}px`)
+  }
+}
+
 const onRefresh = async () => {
   // 预留：仅刷新当前标签下的自选基金，不影响其他标签。
   try {
     const refreshAction = (fundStore as { refreshWatchFundsByTag?: (tagId: number) => Promise<void> | void })
-      .refreshWatchFundsByTag
+        .refreshWatchFundsByTag
 
     if (typeof refreshAction === 'function') {
       await refreshAction(activeWatchTagId.value)
@@ -54,16 +64,32 @@ const onRefresh = async () => {
     // 兜底：若历史缓存污染导致 action 被覆盖，仍保证下拉刷新不报错。
     const tagId = activeWatchTagId.value
     const list = fundStore.getWatchFundsByTag(tagId)
-    fundStore.watchFundsByTag[tagId] = list.map((item) => ({ ...item }))
+    fundStore.watchFundsByTag[tagId] = list.map((item) => ({...item}))
   } finally {
     refreshing.value = false
   }
 }
+
+onMounted(() => {
+  void nextTick(syncWatchTopHeight)
+  window.addEventListener('resize', syncWatchTopHeight)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncWatchTopHeight)
+})
+
+watch(
+    () => watchTags.value.length,
+    () => {
+      void nextTick(syncWatchTopHeight)
+    }
+)
 </script>
 
 <template>
-  <div class="page watchlist-page">
-    <section class="card watch-top">
+  <div ref="pageRef" class="page watchlist-page">
+    <section ref="watchTopRef" class="card watch-top">
       <TagStrip :items="watchTags" :active-id="activeWatchTagId" show-add @change="setActiveTag" @add="toTagManage"/>
 
       <div class="toolbar">
@@ -114,6 +140,7 @@ const onRefresh = async () => {
 
 <style scoped>
 .watchlist-page {
+  --layout-header-height: calc(3.125rem + env(safe-area-inset-top));
   --tabbar-space: calc(3.5rem + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 100vw;
@@ -125,10 +152,13 @@ const onRefresh = async () => {
 }
 
 .watch-top {
-  position: sticky;
-  top: calc(0rem + env(safe-area-inset-top));
-  z-index: 10;
-  padding: 10px 12px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--layout-header-height);
+  z-index: 18;
+  padding: 10px 12px 0;
+  box-sizing: border-box;
 }
 
 .toolbar {
@@ -162,6 +192,7 @@ const onRefresh = async () => {
 }
 
 .list-card {
+  margin-top: calc(var(--watch-top-height, 96px) - 9px);
   max-width: 100%;
   padding: 2px 12px;
   overflow-x: hidden;
@@ -253,3 +284,6 @@ const onRefresh = async () => {
   touch-action: pan-y;
 }
 </style>
+
+
+

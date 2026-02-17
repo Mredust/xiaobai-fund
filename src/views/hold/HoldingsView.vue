@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import {computed} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
 import {buildMiniTrendPath} from '@/utils/chart'
@@ -24,6 +24,8 @@ interface SummaryCardItem {
 const router = useRouter()
 const tagStore = useTagStore()
 const fundStore = useFundStore()
+const pageRef = ref<HTMLElement | null>(null)
+const holdingsTopRef = ref<HTMLElement | null>(null)
 
 const tags = computed(() => tagStore.holdingTags)
 const activeTagId = computed(() => tagStore.activeHoldingTagId)
@@ -125,26 +127,53 @@ const openCategoryTag = (tagId: number) => {
   // 点击分类卡片切换到对应标签页面。
   tagStore.setHoldingActive(tagId)
 }
+
+const syncHoldingsTopHeight = () => {
+  // 固定顶部高度变化时，实时同步内容区顶部偏移，避免遮挡首屏内容。
+  const height = holdingsTopRef.value?.offsetHeight || 0
+  if (pageRef.value) {
+    pageRef.value.style.setProperty('--holdings-top-height', `${height}px`)
+  }
+}
+
+onMounted(() => {
+  void nextTick(syncHoldingsTopHeight)
+  window.addEventListener('resize', syncHoldingsTopHeight)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncHoldingsTopHeight)
+})
+
+watch(
+    () => tags.value.length,
+    () => {
+      void nextTick(syncHoldingsTopHeight)
+    }
+)
 </script>
 
 <template>
-  <div class="page holdings-page">
-    <section class="holdings-top card">
+  <div ref="pageRef" class="page holdings-page">
+    <section ref="holdingsTopRef" class="holdings-top card">
       <TagStrip :items="tags" :active-id="activeTagId" show-add @change="setActiveTag" @add="toTagManage"/>
-      <div class="summary-box">
-        <div class="summary-col">
-          <span class="summary-label">账户资产</span>
-          <strong class="summary-value">{{ summaryAsset.toFixed(2) }}</strong>
-        </div>
-        <div class="summary-col right">
-          <span class="summary-label">当日总收益</span>
-          <strong class="summary-value"
-                  :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
-        </div>
-      </div>
     </section>
 
     <section v-if="isAccountSummaryTab" class="summary-list-wrap">
+      <div class="summary-scroll-head">
+        <div class="summary-box">
+          <div class="summary-col">
+            <span class="summary-label">账户资产</span>
+            <strong class="summary-value">{{ summaryAsset.toFixed(2) }}</strong>
+          </div>
+          <div class="summary-col right">
+            <span class="summary-label">当日总收益</span>
+            <strong class="summary-value"
+                    :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
+          </div>
+        </div>
+      </div>
+
       <article v-for="item in accountSummaryCards" :key="item.tagId" class="card summary-item"
                @click="openCategoryTag(item.tagId)">
         <div class="summary-item-top">
@@ -201,6 +230,20 @@ const openCategoryTag = (tagId: number) => {
     </section>
 
     <section v-if="!isAccountSummaryTab" class="funds-card card">
+      <div class="summary-scroll-head">
+        <div class="summary-box">
+          <div class="summary-col">
+            <span class="summary-label">账户资产</span>
+            <strong class="summary-value">{{ summaryAsset.toFixed(2) }}</strong>
+          </div>
+          <div class="summary-col right">
+            <span class="summary-label">当日总收益</span>
+            <strong class="summary-value"
+                    :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
+          </div>
+        </div>
+      </div>
+
       <div v-if="isAllTab" class="funds-overview">
         <span class="title">全部基金</span>
         <span class="stats">
@@ -248,6 +291,7 @@ const openCategoryTag = (tagId: number) => {
 
 <style scoped>
 .holdings-page {
+  --layout-header-height: calc(3.125rem + env(safe-area-inset-top));
   --tabbar-space: calc(3.5rem + env(safe-area-inset-bottom));
   padding: 0;
   height: calc(100vh - 3.5rem - env(safe-area-inset-bottom));
@@ -258,9 +302,20 @@ const openCategoryTag = (tagId: number) => {
 }
 
 .holdings-top {
-  background: linear-gradient(180deg, #ffe389 0%, #f8dd6f 45%, #f7f2d8 100%);
-  padding: 10px 12px 0 12px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--layout-header-height);
+  z-index: 18;
+  background-color: #ffe389;
+  padding: 10px 12px;
+  box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.summary-scroll-head {
+  background: linear-gradient(180deg, #ffe389 0%, #f8dd6f 45%, #f7f2d8 100%);
+  padding: 0 12px;
 }
 
 .summary-box {
@@ -299,8 +354,8 @@ const openCategoryTag = (tagId: number) => {
 .summary-list-wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   flex: 1;
+  margin-top: calc(var(--holdings-top-height, 56px) - 10px);
   padding-bottom: var(--tabbar-space);
   box-sizing: border-box;
   overflow-y: auto;
@@ -415,6 +470,7 @@ const openCategoryTag = (tagId: number) => {
 
 .funds-card {
   flex: 1;
+  margin-top: calc(var(--holdings-top-height, 56px) - 9px);
   padding-bottom: var(--tabbar-space);
   box-sizing: border-box;
   overflow-y: auto;
@@ -530,3 +586,7 @@ const openCategoryTag = (tagId: number) => {
   cursor: pointer;
 }
 </style>
+
+
+
+

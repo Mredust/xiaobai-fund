@@ -84,19 +84,18 @@ const onFunctionItemClick = () => {
   background: #f3f4f8;
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .profile-scroll {
-  min-height: calc(100vh - 3.5rem - env(safe-area-inset-bottom));
+  height: calc(100vh - 3.5rem - env(safe-area-inset-bottom));
   padding: 0.875rem 0.75rem 1rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   max-width: 100%;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .user-section {
