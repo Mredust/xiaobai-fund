@@ -48,6 +48,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/hold/ManualHoldingsView.vue')
   },
   {
+    path: '/fund/:code/add-holding/select-tag',
+    name: 'fund-add-holding-select-tag',
+    component: () => import('@/views/hold/AddHoldingTagSelectView.vue')
+  },
+  {
+    path: '/fund/:code/add-holding/input',
+    name: 'fund-add-holding-input',
+    component: () => import('@/views/hold/AddHoldingInputView.vue')
+  },
+  {
     path: '/fund-search',
     name: 'fund-search',
     component: () => import('@/views/common/FundSearchView.vue')

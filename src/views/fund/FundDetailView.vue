@@ -6,6 +6,7 @@ import BaseTopNav from '@/components/BaseTopNav.vue'
 import TrendChart from '@/views/fund/components/TrendChart.vue'
 import {fetchFundData, type FundDetailResult} from '@/api/fundApi'
 import {useFundStore} from '@/stores/funds'
+import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
 import {formatPercent, formatYmd} from '@/utils/format'
 import {globalSettings} from "@/config/global.ts";
 
@@ -13,6 +14,7 @@ const appName = globalSettings.appName;
 const route = useRoute()
 const router = useRouter()
 const fundStore = useFundStore()
+const tagStore = useTagStore()
 
 const loading = ref(false)
 const errorText = ref('')
@@ -27,8 +29,9 @@ const periodOptions: Array<{ key: PeriodKey; label: string }> = [
   {key: '3y', label: '近3年'}
 ]
 const activePeriod = ref<PeriodKey>('3m')
-const showMoreSheet = ref(false)
 const intradayXAxisLabels = ['9:30', '11:30/13:00', '15:00']
+const showWatchGroupPopup = ref(false)
+const selectedWatchTagId = ref(0)
 
 const code = computed(() => String(route.params.code || '').trim())
 const backToPath = computed(() => {
@@ -40,9 +43,29 @@ const backToPath = computed(() => {
   return from
 })
 
+const isHoldingFund = computed(() => fundStore.isHoldingFund(code.value))
+const isWatchFund = computed(() => fundStore.isWatchFund(code.value))
+const watchTags = computed(() => tagStore.watchTags)
+const allWatchTagId = computed(() => watchTags.value.find((item) => item.name === TAG_NAME_ALL)?.id ?? 0)
+const hasCustomWatchTag = computed(() => watchTags.value.some((item) => item.name !== TAG_NAME_ALL))
+
+type BottomRule = 'rule1' | 'rule2' | 'rule3' | 'holdingOnly'
+const bottomRule = computed<BottomRule>(() => {
+  if (isHoldingFund.value && isWatchFund.value) {
+    return 'rule3'
+  }
+  if (isHoldingFund.value && !isWatchFund.value) {
+    return 'holdingOnly'
+  }
+  if (isWatchFund.value) {
+    return 'rule2'
+  }
+  return 'rule1'
+})
+
 const positionInfo = computed(() => {
   // 读取当前基金持仓信息，缺失时回退默认值。
-  if (!fundStore.isHoldingFund(code.value)) {
+  if (!isHoldingFund.value) {
     return null
   }
 
@@ -58,14 +81,6 @@ const positionInfo = computed(() => {
         yesterdayProfitRate: '--'
       }
   )
-})
-
-const moreActions = computed(() => {
-  // 更多弹窗仅保留基金PK和笔记两个入口。
-  return [
-    {name: '基金PK', key: 'fund-pk'},
-    {name: '笔记', key: 'note'}
-  ]
 })
 
 const trendByPeriod = computed(() => {
@@ -243,9 +258,55 @@ const openEditHolding = () => {
   router.push(`/fund/${code.value}/edit-holding`)
 }
 
+const openAddHolding = () => {
+  // 点击添加持有进入“先选分组，再输入金额”的两步流程。
+  router.push({
+    path: `/fund/${code.value}/add-holding/select-tag`,
+    query: {
+      from: route.fullPath
+    }
+  })
+}
+
 const openTradeRecord = () => {
   // 点击交易记录跳转交易记录页。
   router.push(`/fund/${code.value}/trade-record`)
+}
+
+const openCompare = () => {
+  // 基金对比入口占位，后续接真实能力。
+  showToast('基金对比功能开发中')
+}
+
+const addWatchToTag = (tagId: number) => {
+  // 添加当前基金到指定自选分组。
+  const added = fundStore.addWatchFund({
+    code: code.value,
+    name: detail.value?.name || `基金${code.value}`,
+    tagId
+  })
+  showToast(added ? '已加入自选' : '当前分组已存在该基金')
+}
+
+const openAddWatch = () => {
+  // “加自选”按分组规则处理：仅全部分组时直接添加，否则弹分组选择框。
+  if (isWatchFund.value) {
+    showToast('当前基金已在自选列表')
+    return
+  }
+
+  if (!hasCustomWatchTag.value) {
+    const targetTagId = allWatchTagId.value || tagStore.activeWatchTagId
+    if (!targetTagId) {
+      showToast('暂无可用自选分组')
+      return
+    }
+    addWatchToTag(targetTagId)
+    return
+  }
+
+  selectedWatchTagId.value = tagStore.activeWatchTagId || allWatchTagId.value
+  showWatchGroupPopup.value = true
 }
 
 const deleteHolding = async () => {
@@ -290,21 +351,28 @@ const deleteWatch = async () => {
   }
 }
 
-const openMore = () => {
-  // 打开底部“更多”动作面板。
-  showMoreSheet.value = true
+const closeWatchGroupPopup = () => {
+  // 关闭“加自选分组”弹窗。
+  showWatchGroupPopup.value = false
 }
 
-const handleMoreAction = (action: { key?: string }) => {
-  // 根据“更多”项执行对应动作。
-  if (action.key === 'fund-pk') {
-    showToast('基金PK功能开发中')
+const confirmAddWatchGroup = () => {
+  // 确认添加到选中的自选分组。
+  const targetTagId = selectedWatchTagId.value || allWatchTagId.value || tagStore.activeWatchTagId
+  if (!targetTagId) {
+    showToast('暂无可用自选分组')
+    closeWatchGroupPopup()
     return
   }
 
-  if (action.key === 'note') {
-    showToast('笔记功能开发中')
-  }
+  addWatchToTag(targetTagId)
+  closeWatchGroupPopup()
+}
+
+const openWatchTagManage = () => {
+  // 从弹窗里进入自选分组管理。
+  closeWatchGroupPopup()
+  router.push('/tag-manage?scene=watchlist')
 }
 
 watch(
@@ -480,37 +548,112 @@ watch(
         </van-tabs>
       </section>
 
-      <section class="detail-bottom-bar">
-        <button type="button" class="bar-btn" @click="openEditHolding">
-          <van-icon name="edit" size="18"/>
-          <span>修改持仓</span>
-        </button>
-        <button type="button" class="bar-btn" @click="openTradeRecord">
-          <van-icon name="notes-o" size="18"/>
-          <span>交易记录</span>
-        </button>
-        <button type="button" class="bar-btn" @click="deleteWatch">
-          <van-icon name="minus" size="18"/>
-          <span>删自选</span>
-        </button>
-        <button type="button" class="bar-btn" @click="deleteHolding">
-          <van-icon name="delete-o" size="18"/>
-          <span>删持有</span>
-        </button>
-        <button type="button" class="bar-btn" @click="openMore">
-          <van-icon name="ellipsis" size="18"/>
-          <span>更多</span>
-        </button>
+      <section class="detail-bottom-bar" :class="{ compact: bottomRule === 'rule1' || bottomRule === 'rule2' }">
+        <template v-if="bottomRule === 'rule1'">
+          <button type="button" class="bar-btn" @click="openCompare">
+            <van-icon name="exchange" size="18"/>
+            <span>基金对比</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openAddHolding">
+            <van-icon name="plus" size="18"/>
+            <span>添加持有</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openAddWatch">
+            <van-icon name="star-o" size="18"/>
+            <span>加自选</span>
+          </button>
+        </template>
+
+        <template v-else-if="bottomRule === 'rule2'">
+          <button type="button" class="bar-btn" @click="openCompare">
+            <van-icon name="exchange" size="18"/>
+            <span>基金对比</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openAddHolding">
+            <van-icon name="plus" size="18"/>
+            <span>添加持有</span>
+          </button>
+          <button type="button" class="bar-btn" @click="deleteWatch">
+            <van-icon name="minus" size="18"/>
+            <span>删自选</span>
+          </button>
+        </template>
+
+        <template v-else-if="bottomRule === 'rule3'">
+          <button type="button" class="bar-btn" @click="openEditHolding">
+            <van-icon name="edit" size="18"/>
+            <span>修改持仓</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openTradeRecord">
+            <van-icon name="notes-o" size="18"/>
+            <span>交易记录</span>
+          </button>
+          <button type="button" class="bar-btn" @click="deleteWatch">
+            <van-icon name="minus" size="18"/>
+            <span>删自选</span>
+          </button>
+          <button type="button" class="bar-btn" @click="deleteHolding">
+            <van-icon name="delete-o" size="18"/>
+            <span>删除持有</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openCompare">
+            <van-icon name="exchange" size="18"/>
+            <span>基金对比</span>
+          </button>
+        </template>
+
+        <template v-else>
+          <button type="button" class="bar-btn" @click="openEditHolding">
+            <van-icon name="edit" size="18"/>
+            <span>修改持仓</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openTradeRecord">
+            <van-icon name="notes-o" size="18"/>
+            <span>交易记录</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openAddWatch">
+            <van-icon name="star-o" size="18"/>
+            <span>加自选</span>
+          </button>
+          <button type="button" class="bar-btn" @click="deleteHolding">
+            <van-icon name="delete-o" size="18"/>
+            <span>删除持有</span>
+          </button>
+          <button type="button" class="bar-btn" @click="openCompare">
+            <van-icon name="exchange" size="18"/>
+            <span>基金对比</span>
+          </button>
+        </template>
       </section>
     </template>
 
-    <van-action-sheet
-        v-model:show="showMoreSheet"
-        :actions="moreActions"
-        cancel-text="取消"
-        close-on-click-action
-        @select="handleMoreAction"
-    />
+    <van-popup v-model:show="showWatchGroupPopup" position="bottom" round class="group-popup">
+      <div class="group-popup-head">
+        <button type="button" class="group-new-btn" @click="openWatchTagManage">+ 新建</button>
+        <strong>添加到以下分组</strong>
+        <button type="button" class="group-close-btn" @click="closeWatchGroupPopup">
+          <van-icon name="cross" size="20"/>
+        </button>
+      </div>
+
+      <van-radio-group v-model="selectedWatchTagId" class="group-list">
+        <div
+          v-for="tag in watchTags"
+          :key="tag.id"
+          class="group-item"
+          role="button"
+          tabindex="0"
+          @click="selectedWatchTagId = tag.id"
+          @keydown.enter.prevent="selectedWatchTagId = tag.id"
+          @keydown.space.prevent="selectedWatchTagId = tag.id"
+        >
+          <van-radio :name="tag.id" checked-color="#2f5bd8"/>
+          <span>{{ tag.name }}</span>
+        </div>
+      </van-radio-group>
+
+      <button type="button" class="group-confirm-btn" @click="confirmAddWatchGroup">确认</button>
+    </van-popup>
   </div>
 </template>
 
@@ -836,10 +979,15 @@ watch(
   z-index: 19;
 }
 
+.detail-bottom-bar.compact {
+  display: flex;
+  justify-content: space-around;
+}
+
 .bar-btn {
   border: 0;
   background: transparent;
-  min-height: 58px;
+  min-height: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -847,6 +995,74 @@ watch(
   gap: 4px;
   color: #232b42;
   font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.detail-bottom-bar.compact .bar-btn {
+  min-width: 74px;
+}
+
+.group-popup {
+  max-height: 70vh;
+  overflow: hidden;
+}
+
+.group-popup-head {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.group-popup-head strong {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #111a37;
+}
+
+.group-new-btn,
+.group-close-btn {
+  border: 0;
+  background: transparent;
+  color: #2f5bd8;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.group-close-btn {
+  color: #b6bccd;
+  display: inline-flex;
+  align-items: center;
+}
+
+.group-list {
+  max-height: calc(70vh - 134px);
+  overflow-y: auto;
+}
+
+.group-item {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.0625rem;
+  color: #111a37;
+  cursor: pointer;
+}
+
+.group-confirm-btn {
+  width: 100%;
+  height: 62px;
+  border: 0;
+  background: #fff;
+  color: #101a39;
+  font-size: 1.125rem;
+  font-weight: 700;
+  border-top: 1px solid #dde2f1;
   cursor: pointer;
 }
 </style>

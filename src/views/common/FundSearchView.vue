@@ -347,10 +347,19 @@ onBeforeUnmount(() => {
       </div>
 
       <van-radio-group v-model="selectedWatchTagId" class="group-list">
-        <label v-for="tag in watchTags" :key="tag.id" class="group-item">
+        <div
+          v-for="tag in watchTags"
+          :key="tag.id"
+          class="group-item"
+          role="button"
+          tabindex="0"
+          @click="selectedWatchTagId = tag.id"
+          @keydown.enter.prevent="selectedWatchTagId = tag.id"
+          @keydown.space.prevent="selectedWatchTagId = tag.id"
+        >
           <van-radio :name="tag.id" checked-color="#2f5bd8"/>
           <span>{{ tag.name }}</span>
-        </label>
+        </div>
       </van-radio-group>
 
       <button type="button" class="group-confirm-btn" @click="confirmAddWatchGroup">确认</button>
@@ -414,9 +423,9 @@ onBeforeUnmount(() => {
 
 .history-grid {
   margin-top: 8px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .history-item {
@@ -425,11 +434,13 @@ onBeforeUnmount(() => {
   text-align: left;
   font-size: 1rem;
   color: #353b50;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-all;
   padding: 0;
   min-height: 28px;
+  line-height: 1.4;
   cursor: pointer;
 }
 
@@ -551,6 +562,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--line);
   font-size: 1.0625rem;
   color: #111a37;
+  cursor: pointer;
 }
 
 .group-confirm-btn {
