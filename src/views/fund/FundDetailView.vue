@@ -83,6 +83,43 @@ const positionInfo = computed(() => {
   )
 })
 
+const parseMetricNumber = (value: string | number | undefined | null) => {
+  // 从文本中提取可比较的数字，失败时回退 null。
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim()
+  if (!normalized || normalized === '--') {
+    return null
+  }
+
+  const numeric = Number(normalized.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const getMetricTrendClass = (value: string | number | undefined | null) => {
+  const numeric = parseMetricNumber(value)
+  if (numeric === null || numeric === 0) {
+    return ''
+  }
+  return numeric > 0 ? 'up' : 'down'
+}
+
+const positionShares = computed(() => {
+  // 以持有金额/持仓成本估算持有份额，缺失时展示 --。
+  const amount = parseMetricNumber(positionInfo.value?.amount)
+  const cost = parseMetricNumber(positionInfo.value?.cost)
+  if (amount === null || amount <= 0 || cost === null || cost <= 0) {
+    return '--'
+  }
+  return (amount / cost).toFixed(2)
+})
+
 const trendByPeriod = computed(() => {
   // 根据周期筛选走势图数据点。
   const list = detail.value?.historyTrend || []
@@ -430,32 +467,36 @@ watch(
             <strong>{{ positionInfo.amount }}</strong>
           </div>
           <div class="grid-cell">
+            <span>持有份额</span>
+            <strong>{{ positionShares }}</strong>
+          </div>
+          <div class="grid-cell">
             <span>持仓占比</span>
             <strong>{{ positionInfo.ratio }}</strong>
+          </div>
+          <div class="grid-cell">
+            <span>持有收益</span>
+            <strong :class="getMetricTrendClass(positionInfo.profit)">{{ positionInfo.profit }}</strong>
+          </div>
+          <div class="grid-cell">
+            <span>持有收益率</span>
+            <strong :class="getMetricTrendClass(positionInfo.profitRate)">{{ positionInfo.profitRate }}</strong>
           </div>
           <div class="grid-cell">
             <span>持仓成本</span>
             <strong>{{ positionInfo.cost }}</strong>
           </div>
           <div class="grid-cell">
-            <span>持有收益</span>
-            <strong>{{ positionInfo.profit }}</strong>
+            <span>昨日收益</span>
+            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfit)">{{ positionInfo.yesterdayProfit }}</strong>
           </div>
           <div class="grid-cell">
-            <span>持有收益率</span>
-            <strong>{{ positionInfo.profitRate }}</strong>
+            <span>昨日收益率</span>
+            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfitRate)">{{ positionInfo.yesterdayProfitRate }}</strong>
           </div>
           <div class="grid-cell">
             <span>持有天数</span>
             <strong>{{ positionInfo.holdingDays }}</strong>
-          </div>
-          <div class="grid-cell">
-            <span>昨日收益</span>
-            <strong>{{ positionInfo.yesterdayProfit }}</strong>
-          </div>
-          <div class="grid-cell">
-            <span>昨日收益率</span>
-            <strong>{{ positionInfo.yesterdayProfitRate }}</strong>
           </div>
         </div>
       </section>

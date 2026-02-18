@@ -99,6 +99,65 @@ const accountSummaryCards = computed<SummaryCardItem[]>(() => {
 const upCount = computed(() => displayFunds.value.filter((item) => item.dailyChange > 0).length)
 const downCount = computed(() => displayFunds.value.filter((item) => item.dailyChange < 0).length)
 
+const parseMetricNumber = (value: string | number | undefined | null) => {
+  // 解析展示值中的数字，无法解析时回退 null。
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim()
+  if (!normalized || normalized === '--') {
+    return null
+  }
+
+  const numeric = Number(normalized.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const getMetricClass = (value: string | number | undefined | null) => {
+  const numeric = parseMetricNumber(value)
+  if (numeric === null || numeric === 0) {
+    return 'flat'
+  }
+  return numeric > 0 ? 'up' : 'down'
+}
+
+const formatMetricAmount = (value: string | number | undefined | null) => {
+  const numeric = parseMetricNumber(value)
+  if (numeric === null) {
+    return '--'
+  }
+  return formatSignedNumber(numeric)
+}
+
+const formatMetricPercent = (value: string | number | undefined | null) => {
+  const numeric = parseMetricNumber(value)
+  if (numeric === null) {
+    return '--'
+  }
+  return formatPercent(numeric)
+}
+
+const formatNav = (value: number | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '--'
+  }
+  return value.toFixed(4)
+}
+
+const truncateFundName = (name: string, maxLength = 6) => {
+  // 基金名称超过指定字数时追加省略号。
+  const chars = Array.from(String(name || ''))
+  if (chars.length <= maxLength) {
+    return name
+  }
+  return `${chars.slice(0, maxLength).join('')}...`
+}
+
 const setActiveTag = (id: number) => {
   // 首页标签切换。
   tagStore.setHoldingActive(id)
@@ -161,7 +220,7 @@ watch(
     </section>
 
     <section v-if="isAccountSummaryTab" class="card summary-list-wrap">
-      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit"/>
 
       <article v-for="item in accountSummaryCards" :key="item.tagId" class="card summary-item"
                @click="openCategoryTag(item.tagId)">
@@ -171,39 +230,52 @@ watch(
             <strong>{{ item.tagName }}</strong>
           </div>
           <div class="compare-metrics">
-            <span class="up">{{ item.upCount }}↑</span>
-            <span class="down">{{ item.downCount }}↓</span>
+            <span class="compare-metric up">
+              <span class="compare-count">{{ item.upCount }}</span>
+              <span class="compare-arrow">↑</span>
+            </span>
+            <span class="compare-metric down">
+              <span class="compare-count">{{ item.downCount }}</span>
+              <span class="compare-arrow">↓</span>
+            </span>
           </div>
         </div>
 
         <div class="summary-item-bottom">
-          <div class="bottom-left">
-            <div class="metric-line">
+          <div class="summary-row summary-row--top">
+            <div class="metric-line summary-metric">
               <span>账户资产</span>
               <strong>{{ item.asset.toFixed(2) }}</strong>
             </div>
-            <div class="metric-line">
+
+            <!-- 走势图 -->
+            <!-- <div class="mini-trend">
+               <svg viewBox="0 0 168 54" preserveAspectRatio="none">
+                 <path :d="item.trendPath" stroke="#13a368" stroke-width="2" fill="none"/>
+               </svg>
+             </div>-->
+          </div>
+
+          <div class="summary-row summary-row--bottom">
+            <div class="metric-line summary-metric">
               <span>持有收益</span>
               <div class="profit-wrap">
                 <strong :class="item.holdingProfit >= 0 ? 'up' : 'down'">{{
                     formatSignedNumber(item.holdingProfit)
                   }}</strong>
-                <small>{{ formatPercent(item.holdingProfitRate) }}</small>
+                <small :class="['profit-chip', getMetricClass(item.holdingProfitRate)]">
+                  {{ formatPercent(item.holdingProfitRate) }}
+                </small>
               </div>
             </div>
-          </div>
 
-          <div class="bottom-right">
-            <div class="mini-trend">
-              <svg viewBox="0 0 168 54" preserveAspectRatio="none">
-                <path :d="item.trendPath" stroke="#13a368" stroke-width="2" fill="none"/>
-              </svg>
-            </div>
-            <div class="day-wrap">
+            <div class="metric-line summary-metric">
               <span>当日收益</span>
               <div class="profit-wrap">
                 <strong :class="item.dayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(item.dayProfit) }}</strong>
-                <small>{{ formatPercent(item.dayProfitRate) }}</small>
+                <small :class="['profit-chip', getMetricClass(item.dayProfitRate)]">
+                  {{ formatPercent(item.dayProfitRate) }}
+                </small>
               </div>
             </div>
           </div>
@@ -219,13 +291,19 @@ watch(
     </section>
 
     <section v-if="!isAccountSummaryTab && displayFunds.length > 0" class="funds-card card">
-      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit"/>
 
       <div v-if="isAllTab" class="funds-overview">
         <span class="title">全部基金</span>
         <span class="stats">
-          <span class="up">↑{{ upCount }}</span>
-          <span class="down">↓{{ downCount }}</span>
+          <span class="stats-item up">
+            <span class="stats-count">{{ upCount }}</span>
+            <span class="stats-arrow">↑</span>
+          </span>
+          <span class="stats-item down">
+            <span class="stats-count">{{ downCount }}</span>
+            <span class="stats-arrow">↓</span>
+          </span>
         </span>
       </div>
 
@@ -239,12 +317,28 @@ watch(
       <div class="fund-list">
         <article v-for="item in displayFunds" :key="item.id" class="fund-item" @click="toFundDetail(item.code)">
           <div class="left">
-            <strong>{{ item.name }}</strong>
+            <strong :title="item.name">{{ truncateFundName(item.name) }}</strong>
             <span>{{ item.code }}</span>
           </div>
-          <div class="right">
-            <span :class="item.dailyChange >= 0 ? 'up' : 'down'">{{ item.dailyChange.toFixed(2) }}%</span>
-            <span>{{ fundStore.positionByCode[item.code]?.profit || '--' }}</span>
+          <div class="fund-metric">
+            <strong :class="getMetricClass(fundStore.positionByCode[item.code]?.yesterdayProfit)">
+              {{ formatMetricAmount(fundStore.positionByCode[item.code]?.yesterdayProfit) }}
+            </strong>
+            <small :class="getMetricClass(item.dailyChange)">
+              {{ formatPercent(item.dailyChange) }}
+            </small>
+          </div>
+          <div class="fund-metric">
+            <strong :class="getMetricClass(item.dailyChange)">{{ formatPercent(item.dailyChange) }}</strong>
+            <small>{{ formatNav(item.nav) }}</small>
+          </div>
+          <div class="fund-metric">
+            <strong :class="getMetricClass(fundStore.positionByCode[item.code]?.profit)">
+              {{ formatMetricAmount(fundStore.positionByCode[item.code]?.profit) }}
+            </strong>
+            <small :class="getMetricClass(fundStore.positionByCode[item.code]?.profitRate)">
+              {{ formatMetricPercent(fundStore.positionByCode[item.code]?.profitRate) }}
+            </small>
           </div>
         </article>
       </div>
@@ -258,7 +352,7 @@ watch(
     </section>
 
     <section v-if="!isAccountSummaryTab && displayFunds.length === 0" class="funds-card card">
-      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit"/>
 
       <div class="empty-wrap empty-wrap-centered">
         <van-empty description="当前标签暂无持仓基金">
@@ -336,26 +430,42 @@ watch(
   align-items: center;
 }
 
-.compare-metrics > span {
+.compare-metric {
   min-width: 3.25em;
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  gap: 2px;
   line-height: 1;
+}
+
+.compare-count,
+.compare-arrow {
+  display: inline-flex;
+  align-items: center;
+}
+
+.compare-arrow {
+  margin-top: -5px;
+  margin-left: 5px;
 }
 
 .summary-item-bottom {
   margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.bottom-left,
-.bottom-right {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+.summary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.summary-metric {
+  justify-content: center;
 }
 
 .metric-line {
@@ -365,13 +475,13 @@ watch(
 }
 
 .metric-line span,
-.day-wrap span {
+.summary-metric span {
   color: #7c8398;
   font-size: 0.8125rem;
 }
 
 .metric-line strong,
-.day-wrap strong {
+.summary-metric strong {
   font-size: 1rem;
   line-height: 1;
 }
@@ -384,30 +494,30 @@ watch(
 
 .profit-wrap small {
   font-size: 0.8125rem;
-  color: #6f7790;
-  background: #ecf6ef;
-  padding: 2px 6px;
-  border-radius: 6px;
 }
 
 .mini-trend {
-  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-trend-head {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.6875rem;
+  color: #7c8398;
+  background: #f8f9fc;
 }
 
 .mini-trend svg {
   width: 100%;
-  height: 62px;
+  height: 54px;
   display: block;
-}
-
-.day-wrap {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .funds-card {
@@ -422,13 +532,15 @@ watch(
 
 .funds-overview,
 .funds-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 8px;
   align-items: center;
   padding: 0 12px;
 }
 
 .funds-overview {
+  grid-template-columns: 1fr auto;
   margin-bottom: 12px;
 }
 
@@ -445,20 +557,43 @@ watch(
   font-size: 1.125rem;
 }
 
+.funds-overview .stats-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.stats-arrow {
+  margin-top: -5px;
+  margin-left: 2px;
+}
+
+.funds-overview .stats-arrow,
+.funds-overview .stats-count {
+  display: inline-flex;
+  align-items: center;
+}
+
 .funds-header {
   color: var(--text-sub);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  height: 42px;
+  min-height: 42px;
   font-size: 0.7rem;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .funds-header > span {
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   text-align: right;
 }
 
 .funds-header > span:first-child {
+  justify-content: flex-start;
   text-align: left;
 }
 
@@ -484,34 +619,84 @@ watch(
 }
 
 .fund-item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
 }
 
 .fund-item .left,
-.fund-item .right {
+.fund-item .fund-metric {
   display: flex;
   flex-direction: column;
 }
 
 .fund-item .left span,
-.fund-item .right span {
+.fund-item .fund-metric small {
   font-size: 0.7rem;
 }
 
-.fund-item .right {
+.fund-item .fund-metric {
   align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
 }
 
-.fund-item strong {
+.fund-item .left strong {
   font-size: 0.8rem;
 }
 
-.fund-item span {
+.fund-item .left span {
   color: var(--text-sub);
+}
+
+.fund-item .fund-metric strong {
+  font-size: 0.8rem;
+  line-height: 1.1;
+  color: #1f2741;
+}
+
+.fund-item .fund-metric small {
+  line-height: 1.1;
+  color: #7b8298;
+}
+
+.fund-item .fund-metric strong.up {
+  color: var(--up);
+}
+
+.fund-item .fund-metric strong.down {
+  color: var(--down);
+}
+
+.fund-item .fund-metric strong.flat {
+  color: #7b8298;
+}
+
+.profit-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1.1;
+}
+
+.profit-chip.down {
+  color: #11b666;
+  background: #e6f7ef;
+}
+
+.profit-chip.up {
+  color: #fc5456;
+  background: #feeded;
+}
+
+.profit-chip.flat {
+  color: #b9bfcc;
+  background: #f6f7f9;
 }
 
 .funds-actions {
