@@ -117,11 +117,7 @@ export const useFundStore = defineStore('funds', {
       11: [...initialWatchFunds]
     } as Record<number, WatchFundItem[]>,
     marketSectors: [...initialSectors],
-    searchHistory: [
-      { code: '161226', name: '国投瑞银白银期货(LOF)A' },
-      { code: '025647', name: '平安高端装备混合C' },
-      { code: '012349', name: '天弘恒生科技ETF联接(QDII)C' }
-    ] as SearchHistoryItem[],
+    searchHistory: [] as SearchHistoryItem[],
     hotFunds: [
       { code: '161226', name: '国投瑞银白银期货(LOF)A' },
       { code: '025647', name: '平安高端装备混合C' },

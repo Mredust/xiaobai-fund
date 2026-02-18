@@ -90,6 +90,6 @@ withDefaults(
 .summary-value {
   font-size: 1.5rem;
   line-height: 1;
-  font-weight: 4;
+  font-weight: 500;
 }
 </style>

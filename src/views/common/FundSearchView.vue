@@ -299,7 +299,8 @@ onBeforeUnmount(() => {
         <div class="history-grid">
           <button v-for="item in historyList" :key="item.code" type="button" class="history-item"
                   @click="selectHistory(item)">
-            {{ item.name }}
+            <strong class="history-name">{{ item.name }}</strong>
+            <span class="history-code">{{ item.code }}</span>
           </button>
         </div>
       </template>
@@ -432,16 +433,30 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: 1rem;
-  color: #353b50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
   word-break: break-all;
   padding: 0;
   min-height: 28px;
-  line-height: 1.4;
   cursor: pointer;
+}
+
+.history-name {
+  margin: 0;
+  font-size: 1rem;
+  color: #353b50;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.history-code {
+  font-size: 0.8125rem;
+  color: #8a90a5;
+  line-height: 1.2;
 }
 
 .loading-wrap {

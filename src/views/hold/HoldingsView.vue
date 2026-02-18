@@ -6,7 +6,7 @@ import SummaryScrollHead from '@/views/hold/components/SummaryScrollHead.vue'
 import {buildMiniTrendPath} from '@/utils/chart'
 import {formatPercent, formatSignedNumber} from '@/utils/format'
 import {toSafeNumber} from '@/utils/number'
-import {useTagStore} from '@/stores/tags'
+import {HOLDING_ACCOUNT_SUMMARY_NAME, TAG_NAME_ALL, useTagStore} from '@/stores/tags'
 import {useFundStore} from '@/stores/funds'
 
 interface SummaryCardItem {
@@ -36,25 +36,47 @@ const activeTagId = computed(() => tagStore.activeHoldingTagId)
 const isAccountSummaryTab = computed(() => {
   // 使用标签名称判断是否为“账户汇总”模式，避免依赖固定 id。
   const activeTag = tags.value.find((item) => item.id === activeTagId.value)
-  return activeTag?.name === '账户汇总'
+  return activeTag?.name === HOLDING_ACCOUNT_SUMMARY_NAME
 })
 
 const isAllTab = computed(() => {
   // 使用标签名称判断是否为“全部”模式，避免依赖固定 id。
   const activeTag = tags.value.find((item) => item.id === activeTagId.value)
-  return activeTag?.name === '全部'
+  return activeTag?.name === TAG_NAME_ALL
 })
 
 const summaryTagList = computed(() => {
   // 分类汇总卡片排除“账户汇总”和“全部”标签。
-  return tags.value.filter((item) => item.name !== '账户汇总' && item.name !== '全部')
+  return tags.value.filter((item) => item.name !== HOLDING_ACCOUNT_SUMMARY_NAME && item.name !== TAG_NAME_ALL)
 })
 
+const allHoldingTag = computed(() => tags.value.find((item) => item.name === TAG_NAME_ALL) || null)
+
+const mergeUniqueFundsByCode = (rows: ReturnType<typeof fundStore.getHoldingFundsByTag>) => {
+  // “全部”标签下按 code 去重，避免同一基金重复展示。
+  const seenCodes = new Set<string>()
+  return rows.filter((item) => {
+    if (seenCodes.has(item.code)) {
+      return false
+    }
+    seenCodes.add(item.code)
+    return true
+  })
+}
+
 const displayFunds = computed(() => {
-  // “账户汇总/全部”聚合其他所有标签，其余标签仅展示自身基金。
-  if (isAccountSummaryTab.value || isAllTab.value) {
+  // “账户汇总”聚合其他所有标签，其余标签按规则展示。
+  if (isAccountSummaryTab.value) {
     return summaryTagList.value.flatMap((tag) => fundStore.getHoldingFundsByTag(tag.id))
   }
+
+  // “全部”在汇总其他标签基础上，也包含直接加到“全部”标签的基金。
+  if (isAllTab.value) {
+    const summaryFunds = summaryTagList.value.flatMap((tag) => fundStore.getHoldingFundsByTag(tag.id))
+    const allTagFunds = allHoldingTag.value ? fundStore.getHoldingFundsByTag(allHoldingTag.value.id) : []
+    return mergeUniqueFundsByCode([...summaryFunds, ...allTagFunds])
+  }
+
   return fundStore.getHoldingFundsByTag(activeTagId.value)
 })
 

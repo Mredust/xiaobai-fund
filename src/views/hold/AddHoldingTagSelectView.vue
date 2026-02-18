@@ -31,26 +31,6 @@ const holdingTagOptions = computed(() => {
   return filtered.length ? filtered : [...tagStore.holdingTags]
 })
 
-const dateText = computed(() => {
-  const raw = detail.value?.gztime || ''
-  const datePart = raw.split(' ')[0] || ''
-  if (!datePart.includes('-')) {
-    return '--'
-  }
-  return datePart.slice(5)
-})
-
-const navText = computed(() => {
-  const value = Number(detail.value?.gsz)
-  return Number.isFinite(value) ? value.toFixed(4) : '--'
-})
-
-const changeValue = computed(() => Number(detail.value?.gszzl || 0))
-
-const changeText = computed(() => {
-  return `${changeValue.value >= 0 ? '+' : ''}${changeValue.value.toFixed(2)}%`
-})
-
 const loadDetail = async () => {
   if (!code.value) {
     detail.value = null
