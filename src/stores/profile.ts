@@ -1,11 +1,17 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
+import defaultAvatar from '@/assets/images/default.png'
+
+const createDefaultNickname = () => {
+  const random5Digits = Math.floor(10000 + Math.random() * 90000)
+  return `用户${random5Digits}`
+}
 
 export const useProfileStore = defineStore('profile', {
   state: () => ({
-    nickname: 'M.红尘',
+    nickname: createDefaultNickname(),
     companionDays: 217,
-    avatar: 'https://fastly.jsdelivr.net/npm/@vant/assets/cat.jpeg',
-    dataSource: '数据源1'
+    avatar: defaultAvatar,
+    dataSource: '数据源'
   }),
   actions: {
     setNickname(value: string) {
