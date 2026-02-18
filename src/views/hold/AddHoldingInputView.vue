@@ -189,8 +189,6 @@ watch(
       </section>
 
       <section class="card form-card">
-        <div class="hint-line">⇌ 份额</div>
-
         <button type="button" class="input-row" @click="openKeyboard('amount')">
           <span class="label">持有金额</span>
           <span class="value">{{ amountValue || '请输入该基金的持有金额' }}</span>
@@ -345,7 +343,7 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sync-check {
@@ -354,7 +352,7 @@ watch(
 }
 
 .confirm-btn {
-  height: 56px;
-  font-size: 1.125rem;
+  height: 45px;
+  font-size: 1rem;
 }
 </style>

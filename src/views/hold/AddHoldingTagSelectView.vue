@@ -121,19 +121,6 @@ watch(
     </section>
 
     <template v-else-if="detail">
-      <section class="card fund-brief">
-        <div class="fund-name-row">
-          <strong class="fund-name">{{ detail.name }}</strong>
-          <span class="fund-code">{{ detail.code }}</span>
-        </div>
-
-        <div class="fund-nav-row">
-          <span>最新净值 ({{ dateText }})：</span>
-          <strong>{{ navText }}</strong>
-          <strong class="change-text" :class="changeValue >= 0 ? 'rise' : 'fall'">{{ changeText }}</strong>
-        </div>
-      </section>
-
       <section class="card tag-list">
         <button
           v-for="tag in holdingTagOptions"
