@@ -1,20 +1,24 @@
 ﻿<script setup lang="ts">
-import {computed, ref, watch} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {showConfirmDialog, showToast} from 'vant'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { showConfirmDialog, showToast } from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
 import TrendChart from '@/views/fund/components/TrendChart.vue'
-import {fetchFundData, type FundDetailResult} from '@/api/fundApi'
-import {useFundStore} from '@/stores/funds'
-import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
-import {formatPercent, formatYmd} from '@/utils/format'
-import {globalSettings} from "@/config/global.ts";
+import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
+import { useFundStore } from '@/stores/funds'
+import { TAG_NAME_ALL, useTagStore } from '@/stores/tags'
+import { formatPercent, formatYmd } from '@/utils/format'
+import { globalSettings } from '@/config/global.ts'
 
-const appName = globalSettings.appName;
+const appName = globalSettings.appName
 const route = useRoute()
 const router = useRouter()
 const fundStore = useFundStore()
 const tagStore = useTagStore()
+
+const COLOR_UP = '#e34a4a'
+const COLOR_DOWN = '#22a06b'
+const COLOR_FLAT = '#b9bfcc'
 
 const loading = ref(false)
 const errorText = ref('')
@@ -63,26 +67,6 @@ const bottomRule = computed<BottomRule>(() => {
   return 'rule1'
 })
 
-const positionInfo = computed(() => {
-  // 读取当前基金持仓信息，缺失时回退默认值。
-  if (!isHoldingFund.value) {
-    return null
-  }
-
-  return (
-      fundStore.positionByCode[code.value] || {
-        amount: '0.00',
-        ratio: '--',
-        cost: '--',
-        profit: '0.00',
-        profitRate: '--',
-        holdingDays: '--',
-        yesterdayProfit: '0.00',
-        yesterdayProfitRate: '--'
-      }
-  )
-})
-
 const parseMetricNumber = (value: string | number | undefined | null) => {
   // 从文本中提取可比较的数字，失败时回退 null。
   if (typeof value === 'number') {
@@ -102,22 +86,121 @@ const parseMetricNumber = (value: string | number | undefined | null) => {
   return Number.isFinite(numeric) ? numeric : null
 }
 
-const getMetricTrendClass = (value: string | number | undefined | null) => {
-  const numeric = parseMetricNumber(value)
-  if (numeric === null || numeric === 0) {
-    return ''
+const getNumberTrendClass = (value: number | null) => {
+  if (value === null || value === 0) {
+    return 'flat'
   }
-  return numeric > 0 ? 'up' : 'down'
+  return value > 0 ? 'up' : 'down'
 }
 
-const positionShares = computed(() => {
-  // 以持有金额/持仓成本估算持有份额，缺失时展示 --。
-  const amount = parseMetricNumber(positionInfo.value?.amount)
-  const cost = parseMetricNumber(positionInfo.value?.cost)
-  if (amount === null || amount <= 0 || cost === null || cost <= 0) {
-    return '--'
+const getTrendColorByValue = (value: number | null) => {
+  if (value === null || value === 0) {
+    return COLOR_FLAT
   }
-  return (amount / cost).toFixed(2)
+  return value > 0 ? COLOR_UP : COLOR_DOWN
+}
+
+const getMetricTrendClass = (value: string | number | undefined | null) => {
+  const numeric = parseMetricNumber(value)
+  return getNumberTrendClass(numeric)
+}
+
+const defaultPositionInfo = {
+  amount: '0.00',
+  ratio: '--',
+  cost: '--',
+  profit: '0.00',
+  profitRate: '--',
+  holdingDays: '--',
+  yesterdayProfit: '0.00',
+  yesterdayProfitRate: '--'
+}
+
+const currentNav = computed(() => {
+  const gsz = Number(detail.value?.gsz)
+  if (Number.isFinite(gsz) && gsz > 0) {
+    return gsz
+  }
+  const dwjz = Number(detail.value?.dwjz)
+  if (Number.isFinite(dwjz) && dwjz > 0) {
+    return dwjz
+  }
+  return null
+})
+
+const basePositionInfo = computed(() => {
+  if (!isHoldingFund.value) {
+    return null
+  }
+  return fundStore.positionByCode[code.value] || defaultPositionInfo
+})
+
+const holdingTotalAmount = computed(() => {
+  const seenCodes = new Set<string>()
+  let total = 0
+
+  Object.values(fundStore.holdingFundsByTag).forEach((rows) => {
+    rows.forEach((item) => {
+      if (seenCodes.has(item.code)) {
+        return
+      }
+      seenCodes.add(item.code)
+      const amount = parseMetricNumber(fundStore.positionByCode[item.code]?.amount)
+      if (amount !== null && amount > 0) {
+        total += amount
+      }
+    })
+  })
+
+  return total
+})
+
+const positionInfo = computed(() => {
+  // 按 real-time-fund-main 口径：amount/profit + 当前净值 推导 share/cost/ratio。
+  const base = basePositionInfo.value
+  if (!base) {
+    return null
+  }
+
+  const amount = parseMetricNumber(base.amount) ?? 0
+  const profit = parseMetricNumber(base.profit) ?? 0
+  const nav = currentNav.value
+  const share = nav && amount > 0 ? amount / nav : null
+  const principal = amount - profit
+  const cost = share && share > 0 ? principal / share : null
+  const ratio = amount > 0 && holdingTotalAmount.value > 0 ? (amount / holdingTotalAmount.value) * 100 : null
+  const profitRate = principal > 0 ? (profit / principal) * 100 : null
+
+  const dayRate = Number.isFinite(Number(detail.value?.gszzl)) ? Number(detail.value?.gszzl) : null
+  const yesterdayProfit =
+    dayRate !== null && amount > 0 ? amount - amount / (1 + dayRate / 100) : parseMetricNumber(base.yesterdayProfit)
+
+  return {
+    amount: amount.toFixed(2),
+    amountValue: amount,
+    shares: share !== null ? share.toFixed(2) : '--',
+    sharesValue: share,
+    ratio: ratio !== null ? `${ratio.toFixed(2)}%` : base.ratio || '--',
+    ratioValue: ratio,
+    profit: profit.toFixed(2),
+    profitValue: profit,
+    profitRate:
+      profitRate !== null
+        ? `${profitRate > 0 ? '+' : ''}${profitRate.toFixed(2)}%`
+        : base.profitRate || '--',
+    profitRateValue: profitRate,
+    cost: cost !== null && cost > 0 ? cost.toFixed(4) : base.cost || '--',
+    costValue: cost,
+    yesterdayProfit:
+      yesterdayProfit !== null && Number.isFinite(yesterdayProfit)
+        ? yesterdayProfit.toFixed(2)
+        : base.yesterdayProfit || '--',
+    yesterdayProfitValue: yesterdayProfit,
+    yesterdayProfitRate:
+      dayRate !== null ? `${dayRate > 0 ? '+' : ''}${dayRate.toFixed(2)}%` : base.yesterdayProfitRate || '--',
+    yesterdayProfitRateValue: dayRate,
+    holdingDays: base.holdingDays || '--'
+  }
 })
 
 const trendByPeriod = computed(() => {
@@ -223,14 +306,21 @@ const selectedPeriodCostLineChange = computed(() => {
     return null
   }
 
-  const rawCost = String(positionInfo.value?.cost || '').replace(/[^\d.-]/g, '')
-  const cost = Number(rawCost)
-  if (!Number.isFinite(cost) || cost <= 0) {
+  const cost = positionInfo.value?.costValue ?? null
+  if (typeof cost !== 'number' || !Number.isFinite(cost) || cost <= 0) {
     return null
   }
 
   return ((latestNav - cost) / cost) * 100
 })
+
+const costLineValue = computed(() => {
+  const cost = positionInfo.value?.costValue ?? null
+  return typeof cost === 'number' && Number.isFinite(cost) && cost > 0 ? cost : null
+})
+
+const intradayTrendColor = computed(() => getTrendColorByValue(parseMetricNumber(detail.value?.gszzl)))
+const performanceTrendColor = computed(() => getTrendColorByValue(selectedPeriodRangeChange.value))
 
 const intradayTrend = computed(() => {
   // 分时图取最近 60 个点。
@@ -448,11 +538,11 @@ watch(
       <section class="card header-card">
         <div class="metrics-row">
           <div class="metric-item metric-item--daily">
-            <strong :class="detail.gszzl >= 0 ? 'up' : 'down'">{{ formatPercent(detail.gszzl) }}</strong>
+            <strong :class="getNumberTrendClass(detail.gszzl)">{{ formatPercent(detail.gszzl) }}</strong>
             <label>当日涨幅</label>
           </div>
           <div class="metric-item">
-            <strong class="up">{{ formatPercent(detail.yearChange) }}</strong>
+            <strong :class="getNumberTrendClass(detail.yearChange)">{{ formatPercent(detail.yearChange) }}</strong>
             <label>近一年</label>
           </div>
           <div class="metric-item">
@@ -468,7 +558,7 @@ watch(
           </div>
           <div class="grid-cell">
             <span>持有份额</span>
-            <strong>{{ positionShares }}</strong>
+            <strong>{{ positionInfo.shares }}</strong>
           </div>
           <div class="grid-cell">
             <span>持仓占比</span>
@@ -508,9 +598,9 @@ watch(
             <div class="tab-content">
               <div class="tab-tip">
                 <span>当日走势</span>
-                <strong :class="detail.gszzl >= 0 ? 'up' : 'down'">{{ formatPercent(detail.gszzl) }}</strong>
+                <strong :class="getNumberTrendClass(detail.gszzl)">{{ formatPercent(detail.gszzl) }}</strong>
               </div>
-              <TrendChart :points="intradayTrend" color="#13a368" :x-axis-labels="intradayXAxisLabels"/>
+              <TrendChart :points="intradayTrend" :color="intradayTrendColor" :x-axis-labels="intradayXAxisLabels"/>
 
               <div class="holding-panel">
                 <div class="holding-head">
@@ -543,21 +633,25 @@ watch(
               <div class="performance-meta">
                 <div class="meta-item">
                   <span>{{ selectedPeriodLabel }}涨跌幅</span>
-                  <strong
-                      :class="selectedPeriodRangeChange !== null ? (selectedPeriodRangeChange >= 0 ? 'up' : 'down') : ''">
+                  <strong :class="getNumberTrendClass(selectedPeriodRangeChange)">
                     {{ selectedPeriodRangeChange === null ? '--' : formatPercent(selectedPeriodRangeChange) }}
                   </strong>
                 </div>
                 <div class="meta-item">
                   <span>成本线</span>
-                  <strong
-                      :class="selectedPeriodCostLineChange !== null ? (selectedPeriodCostLineChange >= 0 ? 'up' : 'down') : ''">
+                  <strong :class="getNumberTrendClass(selectedPeriodCostLineChange)">
                     {{ selectedPeriodCostLineChange === null ? '--' : formatPercent(selectedPeriodCostLineChange) }}
                   </strong>
                 </div>
               </div>
 
-              <TrendChart :points="trendByPeriod" color="#4a78f1" :x-axis-labels="performanceXAxisLabels"/>
+              <TrendChart
+                :points="trendByPeriod"
+                :color="performanceTrendColor"
+                :x-axis-labels="performanceXAxisLabels"
+                :cost-line-value="costLineValue"
+                cost-line-label="成本线"
+              />
 
               <div class="period-switch">
                 <button
@@ -581,7 +675,7 @@ watch(
                 <div v-for="item in tenTradeRows" :key="item.date" class="table-row">
                   <span>{{ item.date }}</span>
                   <span>{{ item.nav.toFixed(4) }}</span>
-                  <span :class="item.change >= 0 ? 'up' : 'down'">{{ formatPercent(item.change) }}</span>
+                  <span :class="getNumberTrendClass(item.change)">{{ formatPercent(item.change) }}</span>
                 </div>
               </div>
             </div>
@@ -771,6 +865,10 @@ watch(
   margin-top: 4px;
   font-size: 0.9rem;
   color: #747c92;
+}
+
+.flat {
+  color: #b9bfcc;
 }
 
 .metrics-row {

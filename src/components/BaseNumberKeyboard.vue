@@ -19,6 +19,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:show': [value: boolean]
+  change: [value: string]
   confirm: [value: string]
 }>()
 
@@ -98,6 +99,13 @@ watch(
     }
   }
 )
+
+watch(
+  () => draft.value,
+  (value) => {
+    emit('change', value)
+  }
+)
 </script>
 
 <template>
@@ -110,7 +118,12 @@ watch(
         </button>
       </header>
 
-      <div class="value-line">{{ displayValue }}</div>
+      <div class="value-line">
+        <div class="value-prefix">
+          <slot name="prefix" />
+        </div>
+        <span class="value-main">{{ displayValue }}</span>
+      </div>
 
       <div class="keyboard-grid">
         <button type="button" class="key-btn" @click="inputNumber('1')">1</button>
@@ -167,6 +180,7 @@ watch(
 }
 
 .value-line {
+  position: relative;
   min-height: 44px;
   border-radius: 10px;
   background: #fff;
@@ -175,9 +189,23 @@ watch(
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   font-size: 1.375rem;
   font-weight: 700;
   color: #1f2740;
+}
+
+.value-prefix {
+  position: absolute;
+  left: 10px;
+  top: 7px;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.value-main {
+  margin-left: auto;
 }
 
 .keyboard-grid {

@@ -15,9 +15,12 @@ const loading = ref(false)
 const detail = ref<FundDetailResult | null>(null)
 const code = computed(() => String(route.params.code || '').trim())
 
+const holdingEditMode = ref<'amount' | 'share'>('amount')
+
 const showNumberKeyboard = ref(false)
-const keyboardField = ref<'amount' | 'profit'>('amount')
+const keyboardField = ref<'amount' | 'share' | 'profit'>('amount')
 const keyboardInputValue = ref('')
+const keyboardDraft = ref('')
 
 const showDatePopup = ref(false)
 const dateColumns = ref<string[]>([])
@@ -27,7 +30,6 @@ const maxSelectableDate = new Date()
 const minSelectableDate = new Date(maxSelectableDate.getFullYear() - 20, 0, 1)
 
 const position = computed(() => {
-  // 读取当前基金持仓信息，缺失时回退默认值。
   return (
     fundStore.positionByCode[code.value] || {
       amount: '0.00',
@@ -42,8 +44,19 @@ const position = computed(() => {
   )
 })
 
+const currentNav = computed(() => {
+  const gsz = Number(detail.value?.gsz)
+  if (Number.isFinite(gsz) && gsz > 0) {
+    return gsz
+  }
+  const dwjz = Number(detail.value?.dwjz)
+  if (Number.isFinite(dwjz) && dwjz > 0) {
+    return dwjz
+  }
+  return 0
+})
+
 const dateText = computed(() => {
-  // 从估值时间中提取月-日文本。
   const raw = detail.value?.gztime || ''
   const datePart = raw.split(' ')[0] || ''
   if (!datePart.includes('-')) {
@@ -53,22 +66,30 @@ const dateText = computed(() => {
 })
 
 const navText = computed(() => {
-  // 净值统一保留四位小数。
-  const value = Number(detail.value?.gsz)
-  return Number.isFinite(value) ? value.toFixed(4) : '--'
+  const value = currentNav.value
+  return value > 0 ? value.toFixed(4) : '--'
 })
 
 const changeValue = computed(() => Number(detail.value?.gszzl || 0))
+const changeText = computed(() => `${changeValue.value >= 0 ? '+' : ''}${changeValue.value.toFixed(2)}%`)
 
-const changeText = computed(() => {
-  // 涨跌幅统一保留两位小数。
-  return `${changeValue.value >= 0 ? '+' : ''}${changeValue.value.toFixed(2)}%`
-})
-
-const amountText = computed(() => {
+const amountNumber = computed(() => {
   const value = Number(position.value.amount)
-  return Number.isFinite(value) ? value.toFixed(2) : '--'
+  return Number.isFinite(value) ? value : 0
 })
+
+const shareNumber = computed(() => {
+  if (currentNav.value <= 0 || amountNumber.value <= 0) {
+    return null
+  }
+  return amountNumber.value / currentNav.value
+})
+
+const amountText = computed(() => amountNumber.value.toFixed(2))
+const shareText = computed(() => (shareNumber.value === null ? '--' : shareNumber.value.toFixed(2)))
+
+const primaryLabel = computed(() => (holdingEditMode.value === 'amount' ? '持有金额：' : '持有份额：'))
+const primaryValueText = computed(() => (holdingEditMode.value === 'amount' ? amountText.value : shareText.value))
 
 const profitText = computed(() => {
   const value = Number(position.value.profit)
@@ -80,13 +101,67 @@ const holdingDaysText = computed(() => {
   return Number.isFinite(value) ? `${value}天` : '--'
 })
 
-const keyboardTitle = computed(() => (keyboardField.value === 'amount' ? '输入持有金额' : '输入持有收益'))
+const keyboardTitle = computed(() => {
+  if (keyboardField.value === 'profit') {
+    return '输入持有收益'
+  }
+  return keyboardField.value === 'amount' ? '输入持有金额' : '输入持有份额'
+})
 
 const previewDate = computed(() => parseColumnsToDate(dateColumns.value) || firstBuyDate.value)
 const previewHoldingDays = computed(() => calcHoldingDaysByDate(previewDate.value))
 
+const parseKeyboardNumber = (value: string) => {
+  const normalized = value.trim()
+  const safeValue =
+    normalized === '' || normalized === '-' || normalized === '.' || normalized === '-.' ? '0' : normalized
+  const parsed = Number(safeValue)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+  return parsed
+}
+
+const formatConvertDisplay = (value: number, digits: number) => {
+  return Number.isFinite(value) ? value.toFixed(digits) : '--'
+}
+
+const keyboardConvertInfo = computed(() => {
+  if (keyboardField.value === 'profit') {
+    return null
+  }
+
+  if (currentNav.value <= 0) {
+    return {
+      icon: 'warning-o',
+      text: '净值不可用'
+    }
+  }
+
+  const parsed = parseKeyboardNumber(keyboardDraft.value)
+  if (parsed === null || parsed < 0) {
+    return {
+      icon: keyboardField.value === 'amount' ? 'bar-chart-o' : 'gold-coin-o',
+      text: '--'
+    }
+  }
+
+  if (keyboardField.value === 'amount') {
+    const share = parsed / currentNav.value
+    return {
+      icon: 'bar-chart-o',
+      text: `份额 ${formatConvertDisplay(share, 2)}`
+    }
+  }
+
+  const amount = parsed * currentNav.value
+  return {
+    icon: 'gold-coin-o',
+    text: `金额 ¥${formatConvertDisplay(amount, 2)}`
+  }
+})
+
 const ensurePositionEntry = () => {
-  // 确保持仓快照存在，便于写回编辑结果。
   if (!fundStore.positionByCode[code.value]) {
     fundStore.updatePositionByCode(code.value, 0, 0)
   }
@@ -144,7 +219,6 @@ const deriveFirstBuyDateByHoldingDays = (holdingDaysRaw: string) => {
 }
 
 const loadDetail = async () => {
-  // 加载基金基础信息，供页面头部展示。
   if (!code.value) {
     detail.value = null
     return
@@ -162,59 +236,70 @@ const loadDetail = async () => {
 }
 
 const openBuy = () => {
-  // 跳转同步加仓页。
   router.push(`/fund/${code.value}/sync-buy`)
 }
 
 const openSell = () => {
-  // 跳转同步减仓页。
   router.push(`/fund/${code.value}/sync-sell`)
 }
 
 const openSip = () => {
-  // 跳转同步定投页。
   router.push(`/fund/${code.value}/sip`)
 }
 
 const openConvert = () => {
-  // 跳转同步转换页。
   router.push(`/fund/${code.value}/convert`)
 }
 
 const openBatchSync = () => {
-  // 预留批量同步入口。
   showToast('批量同步功能开发中')
 }
 
-const openAmountEditor = () => {
-  // 打开“持有金额”数字键盘。
-  keyboardField.value = 'amount'
-  const raw = amountText.value
-  keyboardInputValue.value = raw === '--' || Number(raw) === 0 ? '' : raw
+const switchHoldingEditMode = (mode: 'amount' | 'share') => {
+  holdingEditMode.value = mode
+}
+
+const openPrimaryEditor = () => {
+  keyboardField.value = holdingEditMode.value === 'amount' ? 'amount' : 'share'
+  if (keyboardField.value === 'amount') {
+    keyboardInputValue.value = amountText.value === '0.00' ? '' : amountText.value
+  } else {
+    keyboardInputValue.value = shareText.value === '--' || shareText.value === '0.00' ? '' : shareText.value
+  }
+  keyboardDraft.value = keyboardInputValue.value
   showNumberKeyboard.value = true
 }
 
 const openProfitEditor = () => {
-  // 打开“持有收益”数字键盘。
   keyboardField.value = 'profit'
   const raw = profitText.value
   keyboardInputValue.value = raw === '--' || Number(raw) === 0 ? '' : raw
+  keyboardDraft.value = keyboardInputValue.value
   showNumberKeyboard.value = true
 }
 
+const onKeyboardDraftChange = (value: string) => {
+  keyboardDraft.value = value
+}
+
 const onKeyboardConfirm = (value: string) => {
-  // 确认数字输入后写回持仓数据。
-  const normalized = value.trim()
-  const safeValue = normalized === '' || normalized === '-' || normalized === '.' || normalized === '-.' ? '0' : normalized
-  const parsed = Number(safeValue)
-  if (!Number.isFinite(parsed)) {
+  const parsed = parseKeyboardNumber(value)
+  if (parsed === null) {
     showToast('请输入有效数字')
     return
   }
 
   const entry = ensurePositionEntry()
+
   if (keyboardField.value === 'amount') {
     entry.amount = Math.max(0, parsed).toFixed(2)
+  } else if (keyboardField.value === 'share') {
+    if (currentNav.value <= 0) {
+      showToast('当前净值不可用，暂无法按份额输入')
+      return
+    }
+    const amountByShare = Math.max(0, parsed) * currentNav.value
+    entry.amount = amountByShare.toFixed(2)
   } else {
     entry.profit = parsed.toFixed(2)
   }
@@ -230,13 +315,11 @@ const onKeyboardConfirm = (value: string) => {
 }
 
 const openDatePicker = () => {
-  // 打开日期选择弹窗。
   dateColumns.value = toDateColumns(firstBuyDate.value)
   showDatePopup.value = true
 }
 
 const confirmDatePicker = () => {
-  // 确认日期后回写持有天数。
   const selected = parseColumnsToDate(dateColumns.value)
   if (!selected) {
     showToast('日期无效')
@@ -253,7 +336,6 @@ const confirmDatePicker = () => {
 watch(
   () => code.value,
   () => {
-    // 基金代码变化时重新加载页面数据。
     void loadDetail()
   },
   { immediate: true }
@@ -262,7 +344,6 @@ watch(
 watch(
   () => position.value.holdingDays,
   (value) => {
-    // 按当前持有天数推导首次买入日期，保证弹窗默认值正确。
     firstBuyDate.value = deriveFirstBuyDateByHoldingDays(value)
   },
   { immediate: true }
@@ -287,15 +368,36 @@ watch(
         <div class="fund-nav-row">
           <span>最新净值 ({{ dateText }})：</span>
           <strong>{{ navText }}</strong>
-          <strong class="change-text" :class="changeValue >= 0 ? 'rise' : 'fall'">{{ changeText }}</strong>
+          <strong class="change-text" :class="changeValue >= 0 ? 'rise' : changeValue < 0 ? 'fall' : 'flat'">{{
+            changeText
+          }}</strong>
         </div>
       </section>
 
       <section class="holding-block">
+        <div class="mode-switch">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: holdingEditMode === 'amount' }"
+            @click="switchHoldingEditMode('amount')"
+          >
+            按金额
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: holdingEditMode === 'share' }"
+            @click="switchHoldingEditMode('share')"
+          >
+            按份额
+          </button>
+        </div>
+
         <div class="holding-list">
-          <button type="button" class="holding-row card clickable" @click="openAmountEditor">
-            <span class="label">持有金额：</span>
-            <strong class="value">{{ amountText }}</strong>
+          <button type="button" class="holding-row card clickable" @click="openPrimaryEditor">
+            <span class="label">{{ primaryLabel }}</span>
+            <strong class="value">{{ primaryValueText }}</strong>
           </button>
 
           <button type="button" class="holding-row card clickable" @click="openProfitEditor">
@@ -331,8 +433,16 @@ watch(
       :title="keyboardTitle"
       :model-value="keyboardInputValue"
       :allow-negative="keyboardField === 'profit'"
+      @change="onKeyboardDraftChange"
       @confirm="onKeyboardConfirm"
-    />
+    >
+      <template #prefix>
+        <div v-if="keyboardConvertInfo" class="convert-badge">
+          <van-icon :name="keyboardConvertInfo.icon" size="14" />
+          <span>{{ keyboardConvertInfo.text }}</span>
+        </div>
+      </template>
+    </BaseNumberKeyboard>
 
     <van-popup v-model:show="showDatePopup" position="bottom" round>
       <section class="date-sheet">
@@ -426,10 +536,36 @@ watch(
   color: #22a06b;
 }
 
+.change-text.flat {
+  color: #b9bfcc;
+}
+
 .holding-block {
   margin-top: 10px;
   padding: 12px;
   background-color: #fff;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mode-btn {
+  border: 0;
+  border-radius: 8px;
+  min-height: 34px;
+  background: #edf0f7;
+  color: #6a7289;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.mode-btn.active {
+  background: #dbe5ff;
+  color: #355ecf;
 }
 
 .holding-list {
@@ -588,5 +724,16 @@ watch(
   color: #fff;
   font-size: 1.25rem;
   cursor: pointer;
+}
+
+.convert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #5f6882;
+  background: #eef2fb;
+  border-radius: 10px;
+  padding: 2px 8px;
 }
 </style>

@@ -17,10 +17,14 @@ const props = withDefaults(
     points: TrendPoint[]
     color?: string
     xAxisLabels?: string[]
+    costLineValue?: number | null
+    costLineLabel?: string
   }>(),
   {
     color: '#2c77f4',
-    xAxisLabels: () => []
+    xAxisLabels: () => [],
+    costLineValue: null,
+    costLineLabel: '成本线'
   }
 )
 
@@ -28,15 +32,30 @@ const viewWidth = 320
 const viewHeight = 180
 const gradientId = `trend-area-${Math.random().toString(36).slice(2, 9)}`
 
+const chartBoundary = computed(() => {
+  if (!props.points.length) {
+    return null
+  }
+
+  const values = props.points.map((item) => item.y)
+  if (typeof props.costLineValue === 'number' && Number.isFinite(props.costLineValue)) {
+    values.push(props.costLineValue)
+  }
+
+  const minY = Math.min(...values)
+  const maxY = Math.max(...values)
+  const range = maxY - minY || 1
+
+  return { minY, maxY, range }
+})
+
 const normalized = computed(() => {
   // 将原始点数据映射到 SVG 视图坐标系。
-  if (!props.points.length) {
+  if (!props.points.length || !chartBoundary.value) {
     return [] as Array<{ x: number; y: number }>
   }
 
-  const minY = Math.min(...props.points.map((item) => item.y))
-  const maxY = Math.max(...props.points.map((item) => item.y))
-  const range = maxY - minY || 1
+  const { maxY, range } = chartBoundary.value
 
   return props.points.map((item, index) => ({
     x: (index / Math.max(props.points.length - 1, 1)) * viewWidth,
@@ -85,6 +104,32 @@ const axisLabels = computed<AxisLabelNode[]>(() => {
     return { text, left, className: 'middle' as const }
   })
 })
+
+const costLineY = computed(() => {
+  if (!chartBoundary.value) {
+    return null
+  }
+
+  const cost = props.costLineValue
+  if (typeof cost !== 'number' || !Number.isFinite(cost)) {
+    return null
+  }
+
+  const { maxY, range } = chartBoundary.value
+  const y = ((maxY - cost) / range) * viewHeight
+  if (!Number.isFinite(y)) {
+    return null
+  }
+  return Math.min(viewHeight, Math.max(0, y))
+})
+
+const costLineLabelTop = computed(() => {
+  if (costLineY.value === null) {
+    return '0px'
+  }
+  const top = (costLineY.value / viewHeight) * 100
+  return `calc(${top.toFixed(2)}% - 10px)`
+})
 </script>
 
 <template>
@@ -99,7 +144,16 @@ const axisLabels = computed<AxisLabelNode[]>(() => {
 
       <path v-if="areaPath" :d="areaPath" :fill="`url(#${gradientId})`" />
       <path v-if="linePath" :d="linePath" :stroke="color" stroke-width="2" fill="none" />
+      <line
+        v-if="costLineY !== null"
+        :x1="0"
+        :x2="viewWidth"
+        :y1="costLineY"
+        :y2="costLineY"
+        class="cost-line"
+      />
     </svg>
+    <span v-if="costLineY !== null" class="cost-line-label" :style="{ top: costLineLabelTop }">{{ costLineLabel }}</span>
 
     <div v-if="axisLabels.length" class="x-axis-row">
       <span
@@ -119,6 +173,7 @@ const axisLabels = computed<AxisLabelNode[]>(() => {
 
 <style scoped>
 .trend-chart {
+  position: relative;
   width: 100%;
   min-height: 180px;
   border: 1px solid var(--line);
@@ -131,6 +186,25 @@ svg {
   display: block;
   width: 100%;
   height: 180px;
+}
+
+.cost-line {
+  stroke: #96a0b7;
+  stroke-width: 1.2;
+  stroke-dasharray: 6 4;
+}
+
+.cost-line-label {
+  position: absolute;
+  right: 8px;
+  z-index: 2;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: #7f889d;
+  background: rgb(255 255 255 / 85%);
+  border-radius: 8px;
+  padding: 2px 6px;
+  pointer-events: none;
 }
 
 .x-axis-row {
