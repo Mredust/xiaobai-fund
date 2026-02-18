@@ -35,7 +35,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/tag-manage',
     name: 'tag-manage',
-    component: () => import('@/views/hold/TagManageView.vue')
+    component: () => import('@/views/common/TagManageView.vue')
   },
   {
     path: '/import-holdings',

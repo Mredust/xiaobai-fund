@@ -50,48 +50,7 @@ export interface ManualImportItem {
   profit: number
 }
 
-const initialWatchFunds: WatchFundItem[] = [
-  {
-    id: 1,
-    name: '东方人工智能主题混合C',
-    code: '017811',
-    dailyChange: 3.05,
-    nav: 1.9492,
-    boardName: '半导体材料设备',
-    boardChange: 1.92,
-    monthChange: 7.65
-  },
-  {
-    id: 2,
-    name: '银华集成电路混合C',
-    code: '013841',
-    dailyChange: 2.46,
-    nav: 1.8979,
-    boardName: '半导体材料设备',
-    boardChange: 1.92,
-    monthChange: 8.84
-  },
-  {
-    id: 3,
-    name: '德邦半导体产业混合C',
-    code: '014320',
-    dailyChange: 1.6,
-    nav: 2.237,
-    boardName: '存储芯片',
-    boardChange: 0.79,
-    monthChange: 6.33
-  },
-  {
-    id: 4,
-    name: '永赢先锋半导体智选混合C',
-    code: '025209',
-    dailyChange: 0.82,
-    nav: 1.6392,
-    boardName: '存储芯片',
-    boardChange: 0.79,
-    monthChange: 5.27
-  }
-]
+const initialWatchFunds: WatchFundItem[] = []
 
 const initialSectors: SectorItem[] = [
   {
@@ -151,13 +110,7 @@ export const useFundStore = defineStore('funds', {
       1: []
     } as Record<number, WatchFundItem[]>,
     watchFundsByTag: {
-      11: [...initialWatchFunds],
-      12: [],
-      13: [],
-      14: [],
-      15: [],
-      16: [],
-      17: []
+      11: [...initialWatchFunds]
     } as Record<number, WatchFundItem[]>,
     marketSectors: [...initialSectors],
     searchHistory: [

@@ -31,7 +31,7 @@ const emit = defineEmits<{
       </button>
     </div>
     <button v-if="showAdd" type="button" class="add-btn" @click="emit('add')">
-      <van-icon name="plus" size="20"/>
+      <van-icon name="bars" size="20"/>
     </button>
   </div>
 </template>
@@ -74,7 +74,7 @@ const emit = defineEmits<{
 
 .add-btn {
   border: 0;
-  background: #f2f4fa;
+  background: white;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -85,4 +85,3 @@ const emit = defineEmits<{
   flex-shrink: 0;
 }
 </style>
-

@@ -1,11 +1,25 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import draggable from 'vuedraggable'
 import { showConfirmDialog, showToast } from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
-import { useTagStore, type TagItem } from '@/stores/tags'
+import {
+  HOLDING_ACCOUNT_SUMMARY_NAME,
+  TAG_NAME_ALL,
+  useTagStore,
+  type TagItem
+} from '@/stores/tags'
 import { useFundStore } from '@/stores/funds'
+
+interface DragMoveEvent {
+  draggedContext: {
+    element: TagItem
+  }
+  relatedContext?: {
+    element?: TagItem
+  }
+}
 
 const route = useRoute()
 const tagStore = useTagStore()
@@ -21,22 +35,91 @@ const pageTitle = computed(() => {
   return manageScene.value === 'watchlist' ? '自选标签管理' : '持有标签管理'
 })
 
-const reorderCurrentTags = (value: TagItem[]) => {
-  // 根据当前场景重排标签；自选场景直接改 state，规避热更新导致的方法缺失。
+const isAccountSummaryTag = (item: TagItem) => item.name === HOLDING_ACCOUNT_SUMMARY_NAME
+const isAllTag = (item: TagItem) => item.name === TAG_NAME_ALL
+
+const canRemoveTag = (item: TagItem) => {
   if (manageScene.value === 'watchlist') {
-    tagStore.watchTags = [...value]
+    return !isAllTag(item)
+  }
+  return !isAllTag(item) && !isAccountSummaryTag(item)
+}
+
+const canEditTag = (item: TagItem) => {
+  if (manageScene.value === 'watchlist') {
+    return !isAllTag(item)
+  }
+  return !isAllTag(item) && !isAccountSummaryTag(item)
+}
+
+const canClearTag = (item: TagItem) => {
+  if (manageScene.value === 'watchlist') {
+    return true
+  }
+  return !isAccountSummaryTag(item)
+}
+
+const canSortTag = (item: TagItem) => {
+  if (manageScene.value === 'watchlist') {
+    return !isAllTag(item)
+  }
+  return !isAllTag(item) && !isAccountSummaryTag(item)
+}
+
+const normalizeWatchTagOrder = (value: TagItem[]) => {
+  const allTag = tagStore.watchTags.find((item) => isAllTag(item))
+  const customTags = value.filter((item) => !isAllTag(item))
+
+  return [...(allTag ? [allTag] : []), ...customTags]
+}
+
+const normalizeHoldingTagOrder = (value: TagItem[]) => {
+  const accountSummaryTag = tagStore.holdingTags.find((item) => isAccountSummaryTag(item))
+  const allTag = tagStore.holdingTags.find((item) => isAllTag(item))
+  const customTags = value.filter((item) => !isAllTag(item) && !isAccountSummaryTag(item))
+
+  return [
+    ...(accountSummaryTag ? [accountSummaryTag] : []),
+    ...(allTag ? [allTag] : []),
+    ...customTags
+  ]
+}
+
+const reorderCurrentTags = (value: TagItem[]) => {
+  // 根据当前场景重排标签；系统标签始终固定在预设位置。
+  if (manageScene.value === 'watchlist') {
+    tagStore.watchTags = normalizeWatchTagOrder(value)
     if (!tagStore.watchTags.some((item) => item.id === tagStore.activeWatchTagId)) {
       tagStore.activeWatchTagId = tagStore.watchTags[0]?.id ?? 0
     }
     return
   }
-  tagStore.reorderHoldingTags(value)
+
+  tagStore.reorderHoldingTags(normalizeHoldingTagOrder(value))
 }
 
 const tagsModel = computed({
-  get: () => (manageScene.value === 'watchlist' ? tagStore.watchTags : tagStore.holdingTags),
+  get: () =>
+    manageScene.value === 'watchlist'
+      ? tagStore.watchTags
+      : tagStore.holdingTags.filter((item) => !isAccountSummaryTag(item)),
   set: (value: TagItem[]) => reorderCurrentTags(value)
 })
+
+const onTagMove = (event: DragMoveEvent) => {
+  // 系统标签不允许排序，且其他标签不能跨过系统标签区域。
+  const dragged = event.draggedContext.element
+  if (!canSortTag(dragged)) {
+    return false
+  }
+
+  const related = event.relatedContext?.element
+  if (related && !canSortTag(related)) {
+    return false
+  }
+
+  return true
+}
 
 const showEditDialog = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
@@ -55,6 +138,11 @@ const openAddDialog = () => {
 
 const openEditDialog = (item: TagItem) => {
   // 打开“编辑标签”弹窗并回填当前标签名称。
+  if (!canEditTag(item)) {
+    showToast('系统标签不可修改')
+    return
+  }
+
   dialogMode.value = 'edit'
   editingId.value = item.id
   editName.value = item.name
@@ -71,11 +159,7 @@ const confirmEdit = () => {
 
   if (dialogMode.value === 'add') {
     if (manageScene.value === 'watchlist') {
-      // 自选场景新增标签，直接写 state 以兼容旧 store 实例。
-      const id = tagStore.nextTagId
-      tagStore.nextTagId += 1
-      tagStore.watchTags.push({ id, name: value })
-      tagStore.activeWatchTagId = id
+      tagStore.addWatchTag(value)
     } else {
       tagStore.addHoldingTag(value)
     }
@@ -87,18 +171,21 @@ const confirmEdit = () => {
     return false
   }
 
+  const currentTag =
+    manageScene.value === 'watchlist'
+      ? tagStore.watchTags.find((item) => item.id === editingId.value)
+      : tagStore.holdingTags.find((item) => item.id === editingId.value)
+
+  if (!currentTag || !canEditTag(currentTag)) {
+    showToast('系统标签不可修改')
+    return false
+  }
+
   const updated =
     manageScene.value === 'watchlist'
-      ? (() => {
-          // 自选场景编辑标签，直接修改对应项名称。
-          const target = tagStore.watchTags.find((item) => item.id === editingId.value)
-          if (!target) {
-            return false
-          }
-          target.name = value
-          return true
-        })()
+      ? tagStore.updateWatchTag(editingId.value, value)
       : tagStore.updateHoldingTag(editingId.value, value)
+
   if (!updated) {
     showToast('标签修改失败')
     return false
@@ -110,10 +197,18 @@ const confirmEdit = () => {
 
 const removeTag = async (item: TagItem) => {
   // 通过左侧减号移除当前场景标签，移除前进行安全确认。
+  if (!canRemoveTag(item)) {
+    showToast('系统标签不可移除')
+    return
+  }
+
   try {
     await showConfirmDialog({
       title: '安全提示',
-      message: '此账户下的持有基金也会删除，\n您确定删除此账户吗？',
+      message:
+        manageScene.value === 'watchlist'
+          ? '此标签下的自选基金也会删除，\n您确定删除此标签吗？'
+          : '此账户下的持有基金也会删除，\n您确定删除此账户吗？',
       cancelButtonText: '取消',
       confirmButtonText: '确定删除'
     })
@@ -122,27 +217,13 @@ const removeTag = async (item: TagItem) => {
   }
 
   const removed =
-    manageScene.value === 'watchlist'
-      ? (() => {
-          // 自选场景移除标签，至少保留一个标签。
-          if (tagStore.watchTags.length <= 1) {
-            return false
-          }
-          const index = tagStore.watchTags.findIndex((target) => target.id === item.id)
-          if (index < 0) {
-            return false
-          }
-          tagStore.watchTags.splice(index, 1)
-          if (!tagStore.watchTags.some((target) => target.id === tagStore.activeWatchTagId)) {
-            tagStore.activeWatchTagId = tagStore.watchTags[0]?.id ?? 0
-          }
-          return true
-        })()
-      : tagStore.removeHoldingTag(item.id)
+    manageScene.value === 'watchlist' ? tagStore.removeWatchTag(item.id) : tagStore.removeHoldingTag(item.id)
+
   if (!removed) {
-    showToast('至少保留一个标签')
+    showToast('标签不可移除')
     return
   }
+
   if (manageScene.value === 'watchlist') {
     // 标签删除后同步清理该标签下的自选基金数据。
     fundStore.clearWatchFunds(item.id)
@@ -150,11 +231,17 @@ const removeTag = async (item: TagItem) => {
     // 标签删除后同步清理该标签下的持有基金数据。
     fundStore.clearHoldingFunds(item.id)
   }
+
   showToast(`已移除 ${item.name}`)
 }
 
 const clearTag = async (item: TagItem) => {
   // 清空前弹出确认框，并清空当前场景对应数据。
+  if (!canClearTag(item)) {
+    showToast('系统标签不可清空')
+    return
+  }
+
   try {
     await showConfirmDialog({
       title: '安全提示',
@@ -167,7 +254,13 @@ const clearTag = async (item: TagItem) => {
     })
 
     if (manageScene.value === 'watchlist') {
-      fundStore.clearWatchFunds(item.id)
+      if (isAllTag(item)) {
+        Object.keys(fundStore.watchFundsByTag).forEach((key) => {
+          fundStore.clearWatchFunds(Number(key))
+        })
+      } else {
+        fundStore.clearWatchFunds(item.id)
+      }
     } else {
       fundStore.clearHoldingFunds(item.id)
     }
@@ -191,6 +284,7 @@ const clearTag = async (item: TagItem) => {
       <draggable
         v-model="tagsModel"
         item-key="id"
+        :move="onTagMove"
         handle=".sort-handle"
         :delay="250"
         :delay-on-touch-only="true"
@@ -200,21 +294,25 @@ const clearTag = async (item: TagItem) => {
         <template #item="{ element }">
           <article class="row-item">
             <div class="left">
-              <button type="button" class="icon-btn" @click="removeTag(element)">
+              <button v-if="canRemoveTag(element)" type="button" class="icon-btn" @click="removeTag(element)">
                 <van-icon name="minus" size="20" />
               </button>
+              <span v-else class="icon-slot" aria-hidden="true"></span>
               <span class="name">{{ element.name }}</span>
             </div>
             <div class="right">
-              <button type="button" class="icon-btn" @click="openEditDialog(element)">
+              <button v-if="canEditTag(element)" type="button" class="icon-btn" @click="openEditDialog(element)">
                 <van-icon name="edit" size="19" />
               </button>
-              <button type="button" class="icon-btn" @click="clearTag(element)">
+              <span v-else class="icon-slot" aria-hidden="true"></span>
+              <button v-if="canClearTag(element)" type="button" class="icon-btn" @click="clearTag(element)">
                 <van-icon name="delete-o" size="19" />
               </button>
-              <button type="button" class="icon-btn sort-handle">
+              <span v-else class="icon-slot" aria-hidden="true"></span>
+              <button v-if="canSortTag(element)" type="button" class="icon-btn sort-handle">
                 <van-icon name="bars" size="20" />
               </button>
+              <span v-else class="icon-slot" aria-hidden="true"></span>
             </div>
           </article>
         </template>
@@ -321,6 +419,12 @@ const clearTag = async (item: TagItem) => {
   cursor: grabbing;
 }
 
+.icon-slot {
+  width: 36px;
+  height: 36px;
+  display: inline-block;
+}
+
 .add-wrap {
   margin-top: 22px;
   padding: 0 4px;
@@ -334,5 +438,3 @@ const clearTag = async (item: TagItem) => {
   padding: 12px 14px 8px;
 }
 </style>
-
-

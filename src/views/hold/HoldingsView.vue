@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
+import SummaryScrollHead from '@/views/hold/components/SummaryScrollHead.vue'
 import {buildMiniTrendPath} from '@/utils/chart'
 import {formatPercent, formatSignedNumber} from '@/utils/format'
 import {toSafeNumber} from '@/utils/number'
@@ -159,20 +160,8 @@ watch(
       <TagStrip :items="tags" :active-id="activeTagId" show-add @change="setActiveTag" @add="toTagManage"/>
     </section>
 
-    <section v-if="isAccountSummaryTab" class="summary-list-wrap">
-      <div class="summary-scroll-head">
-        <div class="summary-box">
-          <div class="summary-col">
-            <span class="summary-label">账户资产</span>
-            <strong class="summary-value">{{ summaryAsset.toFixed(2) }}</strong>
-          </div>
-          <div class="summary-col right">
-            <span class="summary-label">当日总收益</span>
-            <strong class="summary-value"
-                    :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
-          </div>
-        </div>
-      </div>
+    <section v-if="isAccountSummaryTab" class="card summary-list-wrap">
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
 
       <article v-for="item in accountSummaryCards" :key="item.tagId" class="card summary-item"
                @click="openCategoryTag(item.tagId)">
@@ -230,19 +219,7 @@ watch(
     </section>
 
     <section v-if="!isAccountSummaryTab && displayFunds.length > 0" class="funds-card card">
-      <div class="summary-scroll-head">
-        <div class="summary-box">
-          <div class="summary-col">
-            <span class="summary-label">账户资产</span>
-            <strong class="summary-value">{{ summaryAsset.toFixed(2) }}</strong>
-          </div>
-          <div class="summary-col right">
-            <span class="summary-label">当日总收益</span>
-            <strong class="summary-value"
-                    :class="summaryDayProfit >= 0 ? 'up' : 'down'">{{ formatSignedNumber(summaryDayProfit) }}</strong>
-          </div>
-        </div>
-      </div>
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
 
       <div v-if="isAllTab" class="funds-overview">
         <span class="title">全部基金</span>
@@ -280,8 +257,10 @@ watch(
       </div>
     </section>
 
-    <section v-if="!isAccountSummaryTab && displayFunds.length === 0" class="funds-card card funds-empty-card">
-      <div class="empty-wrap">
+    <section v-if="!isAccountSummaryTab && displayFunds.length === 0" class="funds-card card">
+      <SummaryScrollHead fixed :summary-asset="summaryAsset" :summary-day-profit="summaryDayProfit" />
+
+      <div class="empty-wrap empty-wrap-centered">
         <van-empty description="当前标签暂无持仓基金">
           <van-button round color="#f6c428" type="primary" class="import-btn" @click="toImport">同步持仓</van-button>
         </van-empty>
@@ -308,48 +287,9 @@ watch(
   right: 0;
   top: var(--layout-header-height);
   z-index: 18;
-  background-color: #ffe389;
   padding: 10px 12px;
   box-sizing: border-box;
   flex-shrink: 0;
-}
-
-.summary-scroll-head {
-  background: linear-gradient(180deg, #ffe389 0%, #f8dd6f 45%, #f7f2d8 100%);
-  padding: 0 12px;
-}
-
-.summary-box {
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 10px 10px 0 0;
-  background: rgb(255 255 255 / 55%);
-}
-
-.summary-col {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.summary-col.right {
-  align-items: flex-end;
-}
-
-.summary-label {
-  font-size: 0.8rem;
-  color: #6f6280;
-  opacity: 0.7;
-  margin-bottom: 5px;
-}
-
-.summary-value {
-  font-size: 1.5rem;
-  line-height: 1;
-  font-weight: 4;
 }
 
 .summary-list-wrap {
@@ -367,6 +307,7 @@ watch(
 .summary-item {
   padding: 12px;
   cursor: pointer;
+  border-bottom: 4px solid var(--line)
 }
 
 .summary-item-top {
@@ -479,12 +420,6 @@ watch(
   overscroll-behavior-x: none;
 }
 
-.funds-empty-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .funds-overview,
 .funds-header {
   display: flex;
@@ -529,6 +464,13 @@ watch(
 
 .empty-wrap {
   padding: 22px 12px 10px;
+}
+
+.empty-wrap-centered {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .import-btn {
@@ -593,6 +535,3 @@ watch(
   cursor: pointer;
 }
 </style>
-
-
-
