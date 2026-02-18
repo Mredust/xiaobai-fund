@@ -1,4 +1,5 @@
 ﻿import { defineStore } from 'pinia'
+import { fetchFundEstimatesBatch } from '@/api/fundApi'
 
 export interface WatchFundItem {
   id: number
@@ -6,6 +7,9 @@ export interface WatchFundItem {
   code: string
   dailyChange: number
   nav: number
+  estimateTime?: string
+  estimateNav?: number
+  lastNav?: number
   boardName: string
   boardChange: number
   monthChange?: number
@@ -210,6 +214,9 @@ export const useFundStore = defineStore('funds', {
         name: payload.name || fromWatch?.name || fromHolding?.name || `基金${payload.code}`,
         dailyChange: fromWatch?.dailyChange ?? fromHolding?.dailyChange ?? 0,
         nav: fromWatch?.nav ?? fromHolding?.nav ?? 0,
+        estimateTime: fromWatch?.estimateTime ?? fromHolding?.estimateTime ?? '',
+        estimateNav: fromWatch?.estimateNav ?? fromHolding?.estimateNav ?? 0,
+        lastNav: fromWatch?.lastNav ?? fromHolding?.lastNav ?? 0,
         boardName: fromWatch?.boardName ?? fromHolding?.boardName ?? boardMeta.boardName,
         boardChange: fromWatch?.boardChange ?? fromHolding?.boardChange ?? boardMeta.boardChange,
         monthChange: fromWatch?.monthChange ?? fromHolding?.monthChange ?? 0
@@ -332,11 +339,53 @@ export const useFundStore = defineStore('funds', {
       // 清空指定自选标签列表。
       this.watchFundsByTag[tagId] = []
     },
+    async refreshWatchFundsByCodes(codes: string[]) {
+      // 按 code 数组批量刷新自选快照，统一回填各标签中的同 code 基金。
+      const uniqueCodes = Array.from(
+        new Set(
+          (codes || [])
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+        )
+      )
+
+      if (uniqueCodes.length === 0) {
+        return
+      }
+
+      const snapshots = await fetchFundEstimatesBatch(uniqueCodes)
+      const mergeSnapshot = (item: WatchFundItem) => {
+        const snapshot = snapshots.get(item.code)
+        if (!snapshot) {
+          return { ...item }
+        }
+
+        const estimateNav = snapshot.gsz
+        const lastNav = snapshot.dwjz
+        const nav = estimateNav > 0 ? estimateNav : lastNav > 0 ? lastNav : item.nav
+
+        return {
+          ...item,
+          name: item.name || snapshot.name || `基金${item.code}`,
+          dailyChange: snapshot.gszzl,
+          nav,
+          estimateTime: snapshot.gztime || item.estimateTime || '',
+          estimateNav,
+          lastNav
+        }
+      }
+
+      Object.keys(this.watchFundsByTag).forEach((key) => {
+        const tagId = Number(key)
+        const list = this.watchFundsByTag[tagId] || []
+        this.watchFundsByTag[tagId] = list.map(mergeSnapshot)
+      })
+    },
     async refreshWatchFundsByTag(tagId: number) {
-      // 预留下拉刷新：仅刷新指定自选标签下的基金列表。
+      // 刷新指定自选标签的基金实时快照。
       const list = this.watchFundsByTag[tagId] || []
-      // 当前先做最小占位刷新，后续可在此按 code 批量拉取实时数据并合并字段。
-      this.watchFundsByTag[tagId] = list.map((item) => ({ ...item }))
+      const codes = list.map((item) => item.code)
+      await this.refreshWatchFundsByCodes(codes)
     },
     isHoldingFund(code: string) {
       // 判断基金是否存在于任一持有标签中。

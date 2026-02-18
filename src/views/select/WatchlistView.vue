@@ -2,8 +2,8 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import TagStrip from '@/components/TagStrip.vue'
-import {useTagStore} from '@/stores/tags'
-import {useFundStore} from '@/stores/funds'
+import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
+import {type WatchFundItem, useFundStore} from '@/stores/funds'
 import {formatPercent} from '@/utils/format'
 
 const router = useRouter()
@@ -14,10 +14,59 @@ const watchTopRef = ref<HTMLElement | null>(null)
 
 const watchTags = computed(() => tagStore.watchTags)
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
+const isAllWatchTag = computed(() => {
+  const activeTag = watchTags.value.find((item) => item.id === activeWatchTagId.value)
+  return activeTag?.name === TAG_NAME_ALL
+})
 
 const watchFunds = computed(() => {
-  // 自选列表按当前自选标签读取，标签之间互不共用数据。
+  // “全部”标签聚合其他标签基金并去重，其他标签按自身读取。
+  if (isAllWatchTag.value) {
+    const mergedCodes = new Set<string>()
+    const mergedFunds: WatchFundItem[] = []
+    const nonAllTags = watchTags.value.filter((item) => item.name !== TAG_NAME_ALL)
+    const allTag = watchTags.value.find((item) => item.name === TAG_NAME_ALL)
+    const collectTags = allTag ? [...nonAllTags, allTag] : nonAllTags
+
+    collectTags.forEach((tag) => {
+      fundStore.getWatchFundsByTag(tag.id).forEach((item) => {
+        if (mergedCodes.has(item.code)) {
+          return
+        }
+        mergedCodes.add(item.code)
+        mergedFunds.push(item)
+      })
+    })
+
+    return mergedFunds
+  }
+
   return fundStore.getWatchFundsByTag(activeWatchTagId.value)
+})
+
+const watchFundCodes = computed(() =>
+  Array.from(
+    new Set(
+      watchFunds.value
+        .map((item) => String(item.code || '').trim())
+        .filter(Boolean)
+    )
+  )
+)
+
+const latestEstimateDate = computed(() => {
+  // 头部日期取当前列表中最新一条估值时间。
+  const latest = watchFunds.value
+    .map((item) => String(item.estimateTime || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => (a > b ? -1 : 1))[0]
+
+  if (!latest) {
+    return '--'
+  }
+
+  const dateText = latest.split(' ')[0] || latest
+  return dateText.length >= 10 ? dateText.slice(5) : dateText
 })
 
 const setActiveTag = (id: number) => {
@@ -40,7 +89,8 @@ const toDetail = (code: string) => {
   router.push(`/fund/${code}`)
 }
 
-const refreshing = ref(false)
+const syncingQuotes = ref(false)
+let refreshTimer: number | null = null
 
 const syncWatchTopHeight = () => {
   // 固定头部高度变化时，实时同步列表顶部留白，避免内容被遮挡。
@@ -51,32 +101,55 @@ const syncWatchTopHeight = () => {
 }
 
 const onRefresh = async () => {
-  // 预留：仅刷新当前标签下的自选基金，不影响其他标签。
+  // 按当前列表 code 数组批量拉取估值数据。
   try {
-    const refreshAction = (fundStore as { refreshWatchFundsByTag?: (tagId: number) => Promise<void> | void })
-        .refreshWatchFundsByTag
-
-    if (typeof refreshAction === 'function') {
-      await refreshAction(activeWatchTagId.value)
+    console.log('自选数据刷新')
+    if (syncingQuotes.value) {
       return
     }
-
-    // 兜底：若历史缓存污染导致 action 被覆盖，仍保证下拉刷新不报错。
-    const tagId = activeWatchTagId.value
-    const list = fundStore.getWatchFundsByTag(tagId)
-    fundStore.watchFundsByTag[tagId] = list.map((item) => ({...item}))
+    syncingQuotes.value = true
+    const codes = watchFundCodes.value
+    if (codes.length === 0) {
+      return
+    }
+    const refreshByCodes = (fundStore as { refreshWatchFundsByCodes?: (rows: string[]) => Promise<void> | void })
+      .refreshWatchFundsByCodes
+    if (typeof refreshByCodes === 'function') {
+      await Promise.resolve(refreshByCodes(codes))
+      return
+    }
+    // 兜底：老版本 store 不存在批量 action 时，仍可按标签刷新。
+    const refreshByTag = (fundStore as { refreshWatchFundsByTag?: (tagId: number) => Promise<void> | void })
+      .refreshWatchFundsByTag
+    const targetTagIds = isAllWatchTag.value ? watchTags.value.map((item) => item.id) : [activeWatchTagId.value]
+    if (typeof refreshByTag === 'function') {
+      await Promise.all(targetTagIds.map((tagId) => Promise.resolve(refreshByTag(tagId))))
+      return
+    }
+    targetTagIds.forEach((tagId) => {
+      const list = fundStore.getWatchFundsByTag(tagId)
+      fundStore.watchFundsByTag[tagId] = list.map((item) => ({ ...item }))
+    })
   } finally {
-    refreshing.value = false
+    syncingQuotes.value = false
   }
 }
 
 onMounted(() => {
   void nextTick(syncWatchTopHeight)
   window.addEventListener('resize', syncWatchTopHeight)
+  void onRefresh()
+  refreshTimer = window.setInterval(() => {
+    void onRefresh()
+  }, 60_000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncWatchTopHeight)
+  if (refreshTimer !== null) {
+    window.clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 
 watch(
@@ -84,6 +157,13 @@ watch(
     () => {
       void nextTick(syncWatchTopHeight)
     }
+)
+
+watch(
+  () => watchFundCodes.value.join(','),
+  () => {
+    void onRefresh()
+  }
 )
 </script>
 
@@ -95,44 +175,45 @@ watch(
       <div class="toolbar">
         <div class="icons">
           <van-icon name="setting-o" size="19"/>
+          <button type="button" class="icon-btn" @click="onRefresh" :disabled="syncingQuotes">
+            <van-icon name="replay" size="19" :class="{ spinning: syncingQuotes }"/>
+          </button>
         </div>
         <div class="metrics">
           <div>
             <span>当日涨幅</span>
-            <small>02-13</small>
+            <small>{{ latestEstimateDate }}</small>
           </div>
         </div>
       </div>
     </section>
 
     <section class="card list-card">
-      <van-pull-refresh v-model="refreshing" class="list-pull" @refresh="onRefresh">
-        <div v-if="watchFunds.length === 0" class="empty-wrap">
-          <van-empty description="当前标签暂无基金">
-            <van-button round color="#f6c428" type="primary" class="empty-add-btn" @click="toImportWatch">
-              新增自选
-            </van-button>
-          </van-empty>
-        </div>
+      <div v-if="watchFunds.length === 0" class="empty-wrap">
+        <van-empty description="当前标签暂无基金">
+          <van-button round color="#f6c428" type="primary" class="empty-add-btn" @click="toImportWatch">
+            新增自选
+          </van-button>
+        </van-empty>
+      </div>
 
-        <template v-else>
-          <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
-            <div class="left">
-              <strong>{{ item.name }}</strong>
-              <span>{{ item.code }}</span>
-            </div>
+      <template v-else>
+        <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
+          <div class="left">
+            <strong>{{ item.name }}</strong>
+            <span>{{ item.code }}</span>
+          </div>
 
-            <div class="right">
-              <span class="change" :class="item.dailyChange >= 0 ? 'up' : 'down'">{{
-                  formatPercent(item.dailyChange)
-                }}</span>
-              <div class="sub">
-                <span>{{ item.nav.toFixed(4) }}</span>
-              </div>
+          <div class="right">
+            <span class="change" :class="item.dailyChange > 0 ? 'up' : item.dailyChange < 0 ? 'down' : ''">{{
+                formatPercent(item.dailyChange)
+              }}</span>
+            <div class="sub">
+              <span>{{ item.nav.toFixed(4) }}</span>
             </div>
-          </article>
-        </template>
-      </van-pull-refresh>
+          </div>
+        </article>
+      </template>
     </section>
 
     <section v-if="watchFunds.length > 0" class="add-watch-row">
@@ -176,8 +257,28 @@ watch(
 
 .icons {
   display: flex;
+  align-items: center;
   gap: 14px;
   color: #8a90a5;
+}
+
+.icon-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
 }
 
 .metrics {
@@ -202,11 +303,6 @@ watch(
   max-width: 100%;
   padding: 2px 12px;
   overflow-x: hidden;
-}
-
-.list-pull {
-  overflow-x: hidden;
-  touch-action: pan-y;
 }
 
 .empty-wrap {
@@ -264,8 +360,16 @@ watch(
 
 .change {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1;
+}
+
+.change.up {
+  color: #e34a4a;
+}
+
+.change.down {
+  color: #22a06b;
 }
 
 .sub {
@@ -296,9 +400,9 @@ watch(
   overflow-x: hidden;
 }
 
-.watchlist-page :deep(.van-pull-refresh__track) {
-  touch-action: pan-y;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
-
-

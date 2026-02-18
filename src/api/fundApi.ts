@@ -10,10 +10,38 @@ interface EastSearchItem {
   CATEGORYDESC?: string
 }
 
+export interface FundEstimateSnapshot {
+  code: string
+  name: string
+  dwjz: number
+  gsz: number
+  gztime: string
+  gszzl: number
+}
+
+interface FundLatestNavSnapshot {
+  code: string
+  dwjz: number
+  gszzl: number
+  gztime: string
+}
+
 const toNumber = (value: unknown, fallback = 0) => {
   // 统一处理接口中的字符串数字，避免 NaN 影响渲染。
   const next = Number(value)
   return Number.isFinite(next) ? next : fallback
+}
+
+let estimateRequestQueue = Promise.resolve()
+
+const runEstimateTask = <T>(task: () => Promise<T>) => {
+  // fundgz 固定走 window.jsonpgz，全局串行避免并发覆盖回调。
+  const next = estimateRequestQueue.then(task, task)
+  estimateRequestQueue = next.then(
+    () => undefined,
+    () => undefined
+  )
+  return next
 }
 
 const loadScript = (url: string) => {
@@ -141,6 +169,180 @@ const buildYearChange = (historyTrend: FundTrendPoint[]) => {
   return ((last.y - first.y) / first.y) * 100
 }
 
+const fetchLatestNavByCode = async (code: string) => {
+  // fundgz 无估值时，回退到 FundMNHisNetList 读取最近净值与涨跌幅。
+  const fundCode = String(code || '').trim()
+  if (!fundCode) {
+    return null
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+  try {
+    const url = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?FCODE=${fundCode}&pageIndex=1&pageSize=1&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&_=${Date.now()}`
+    const response = await fetch(url, { signal: controller.signal })
+    if (!response.ok) {
+      return null
+    }
+
+    const payload = (await response.json()) as {
+      Datas?: Array<{ FSRQ?: string; DWJZ?: string; JZZZL?: string }>
+    }
+    const row = payload?.Datas?.[0]
+    if (!row) {
+      return null
+    }
+
+    return {
+      code: fundCode,
+      dwjz: toNumber(row.DWJZ, 0),
+      gszzl: toNumber(row.JZZZL, 0),
+      gztime: row.FSRQ ? `${String(row.FSRQ)} 15:00` : ''
+    } as FundLatestNavSnapshot
+  } catch (error) {
+    console.error(error)
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+const fetchFundEstimateByCode = async (code: string) => {
+  // 拉取单只基金实时估值快照，供列表页批量刷新复用。
+  const fundCode = String(code || '').trim()
+  if (!fundCode) {
+    return null
+  }
+
+  return runEstimateTask(
+    () =>
+      new Promise<FundEstimateSnapshot>((resolve, reject) => {
+        const gzUrl = `https://fundgz.1234567.com.cn/js/${fundCode}.js?rt=${Date.now()}`
+        const script = document.createElement('script')
+        const origin = window.jsonpgz
+        let settled = false
+
+        const cleanup = () => {
+          window.jsonpgz = origin
+          if (document.body.contains(script)) {
+            document.body.removeChild(script)
+          }
+        }
+
+        const finalize = () => {
+          if (settled) {
+            return false
+          }
+          settled = true
+          cleanup()
+          return true
+        }
+
+        const resolveByLatestNav = async () => {
+          const fallback = await fetchLatestNavByCode(fundCode)
+          if (fallback) {
+            resolve({
+              code: fallback.code,
+              name: `基金${fundCode}`,
+              dwjz: fallback.dwjz,
+              gsz: fallback.dwjz,
+              gztime: fallback.gztime,
+              gszzl: fallback.gszzl
+            })
+            return
+          }
+          reject(new Error(`基金估值数据为空: ${fundCode}`))
+        }
+
+        window.jsonpgz = async (json: unknown) => {
+          if (!finalize()) {
+            return
+          }
+
+          if (!json || typeof json !== 'object') {
+            await resolveByLatestNav()
+            return
+          }
+
+          const payload = json as {
+            fundcode?: string
+            name?: string
+            dwjz?: string
+            gsz?: string
+            gztime?: string
+            gszzl?: string
+          }
+
+          const dwjz = toNumber(payload.dwjz, 0)
+          const gsz = toNumber(payload.gsz, 0)
+          const gszzl = toNumber(payload.gszzl, 0)
+          const gztime = String(payload.gztime || '')
+          const hasEstimate = dwjz > 0 || gsz > 0 || gztime.length > 0
+
+          if (!hasEstimate) {
+            await resolveByLatestNav()
+            return
+          }
+
+          resolve({
+            code: String(payload.fundcode || fundCode),
+            name: String(payload.name || `基金${fundCode}`),
+            dwjz,
+            gsz,
+            gztime,
+            gszzl
+          })
+        }
+
+        script.src = gzUrl
+        script.onerror = async () => {
+          if (!finalize()) {
+            return
+          }
+          await resolveByLatestNav()
+        }
+        document.body.appendChild(script)
+
+        setTimeout(async () => {
+          if (!finalize()) {
+            return
+          }
+          await resolveByLatestNav()
+        }, 8000)
+      })
+  )
+}
+
+/**
+ * 批量获取基金实时估值快照。
+ * 用途：根据基金代码数组批量查询涨跌幅、净值、估值时间等列表字段。
+ */
+export const fetchFundEstimatesBatch = async (codes: string[]) => {
+  // 对入参去重清洗，保持与 real-time-fund 的 code 数组处理方式一致。
+  const uniqueCodes = Array.from(
+    new Set(
+      (codes || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  )
+
+  const snapshots = new Map<string, FundEstimateSnapshot>()
+  for (const code of uniqueCodes) {
+    try {
+      const snapshot = await fetchFundEstimateByCode(code)
+      if (snapshot) {
+        snapshots.set(code, snapshot)
+      }
+    } catch {
+      // 单只失败不影响列表其它基金刷新。
+    }
+  }
+
+  return snapshots
+}
+
 /**
  * 搜索基金列表。
  * 用途：根据基金名称/代码关键字获取候选基金，用于基金搜索页和选择转入基金场景。
@@ -222,51 +424,10 @@ export const fetchFundData = async (code: string) => {
     throw new Error('基金代码不能为空')
   }
 
-  const gzPayload = await new Promise<{
-    fundcode: string
-    name: string
-    dwjz: string
-    gsz: string
-    gztime: string
-    gszzl: string
-  }>((resolve, reject) => {
-    const gzUrl = `https://fundgz.1234567.com.cn/js/${fundCode}.js?rt=${Date.now()}`
-    const script = document.createElement('script')
-    const origin = window.jsonpgz
-
-    window.jsonpgz = (json: unknown) => {
-      // 回调完成后恢复原始 jsonpgz，防止污染全局函数。
-      window.jsonpgz = origin
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
-
-      if (!json || typeof json !== 'object') {
-        reject(new Error('基金估值数据为空'))
-        return
-      }
-
-      resolve(json as { fundcode: string; name: string; dwjz: string; gsz: string; gztime: string; gszzl: string })
-    }
-
-    script.src = gzUrl
-    script.onerror = () => {
-      window.jsonpgz = origin
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
-      reject(new Error('基金估值加载失败'))
-    }
-    document.body.appendChild(script)
-
-    setTimeout(() => {
-      if (document.body.contains(script)) {
-        window.jsonpgz = origin
-        document.body.removeChild(script)
-        reject(new Error('基金估值请求超时'))
-      }
-    }, 8000)
-  })
+  const snapshot = await fetchFundEstimateByCode(fundCode)
+  if (!snapshot) {
+    throw new Error('基金估值数据为空')
+  }
 
   let holdings: FundHoldingItem[] = []
   try {
@@ -299,12 +460,12 @@ export const fetchFundData = async (code: string) => {
   const { heatRank, heatTotal } = buildHeatRank(fundCode)
 
   return {
-    code: gzPayload.fundcode || fundCode,
-    name: gzPayload.name || `基金 ${fundCode}`,
-    dwjz: toNumber(gzPayload.dwjz, 0),
-    gsz: toNumber(gzPayload.gsz, 0),
-    gztime: gzPayload.gztime || '',
-    gszzl: toNumber(gzPayload.gszzl, 0),
+    code: snapshot.code || fundCode,
+    name: snapshot.name || `基金 ${fundCode}`,
+    dwjz: toNumber(snapshot.dwjz, 0),
+    gsz: toNumber(snapshot.gsz, 0),
+    gztime: snapshot.gztime || '',
+    gszzl: toNumber(snapshot.gszzl, 0),
     yearChange: buildYearChange(historyTrend),
     heatRank,
     heatTotal,
