@@ -1,11 +1,11 @@
 ﻿<script setup lang="ts">
-import {computed, onBeforeUnmount, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {showToast} from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
 import {searchFunds, type SearchFundResult} from '@/api/fundApi'
 import {useFundStore} from '@/stores/funds'
-import {useTagStore} from '@/stores/tags'
+import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,16 +25,29 @@ const isPickMode = computed(
     () => pickMode.value === 'pick' || pickMode.value === 'pick-convert' || pickMode.value === 'pick-import'
 )
 const pickActionText = computed(() => (pickMode.value === 'pick-import' ? '导入' : '选择'))
+const showWatchAction = computed(
+  // 搜索结果默认展示“加自选”；仅在非自选导入模式才展示“选择/导入”按钮。
+  () => !isPickMode.value || (pickMode.value === 'pick-import' && importScene.value === 'watchlist')
+)
 const importScene = computed<'watchlist' | 'holdings'>(() => {
   // 导入选择场景由路由参数决定，默认导入持仓标签。
   return route.query.scene === 'watchlist' ? 'watchlist' : 'holdings'
 })
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
 const activeHoldingTagId = computed(() => tagStore.activeHoldingTagId)
+const watchTags = computed(() => tagStore.watchTags)
+const watchedCodeSet = computed(() => new Set(fundStore.watchFundCodes))
+const allWatchTagId = computed(() => watchTags.value.find((item) => item.name === TAG_NAME_ALL)?.id ?? 0)
+const hasCustomWatchTag = computed(() => watchTags.value.some((item) => item.name !== TAG_NAME_ALL))
+
+const groupPopupVisible = ref(false)
+const pendingWatchFund = ref<SearchFundResult | null>(null)
+const selectedWatchTagId = ref(0)
+let suppressKeywordWatcher = false
 
 const isWatchFund = (code: string) => {
-  // 查询当前基金是否已在当前自选标签中，用于控制按钮文案。
-  return fundStore.isWatchFund(code, activeWatchTagId.value)
+  // 查询当前基金是否已在任一自选标签中，用于控制按钮文案。
+  return watchedCodeSet.value.has(code)
 }
 
 const runSearch = async (text: string) => {
@@ -59,6 +72,32 @@ const manualSearch = () => {
     debounceTimer = null
   }
   void runSearch(keyword.value)
+}
+
+const buildSearchBackPath = () => {
+  // 构造“详情页返回搜索页”的目标地址，保留 mode/scene 并写入当前关键词。
+  const query: Record<string, string> = {}
+  Object.entries(route.query).forEach(([key, value]) => {
+    if (key === 'from') {
+      return
+    }
+    if (typeof value === 'string' && value.trim()) {
+      query[key] = value
+      return
+    }
+    if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) {
+      query[key] = value[0]
+    }
+  })
+
+  const q = keyword.value.trim()
+  if (q) {
+    query.q = q
+  } else {
+    delete query.q
+  }
+
+  return router.resolve({path: '/fund-search', query}).fullPath
 }
 
 const selectHistory = (item: SearchFundResult) => {
@@ -97,32 +136,86 @@ const chooseFund = (item: SearchFundResult) => {
   }
 }
 
+const chooseFundByButton = (item: SearchFundResult, event: Event) => {
+  // 选择模式下点击右侧按钮进行回填，不触发行跳转详情。
+  event.stopPropagation()
+  chooseFund(item)
+}
+
 const openDetail = (item: SearchFundResult) => {
   // 普通模式点击结果进入基金详情页。
   fundStore.recordSearchHistory(item)
-  router.push(`/fund/${item.code}`)
+  router.push({
+    path: `/fund/${item.code}`,
+    query: {
+      from: buildSearchBackPath()
+    }
+  })
 }
 
-const clickResult = (item: SearchFundResult) => {
-  // 根据页面模式分流到“选择基金”或“查看详情”。
-  if (isPickMode.value) {
-    chooseFund(item)
-    return
-  }
-  openDetail(item)
+const addWatchToTag = (item: SearchFundResult, tagId: number) => {
+  // 添加基金到指定自选标签并提示结果。
+  const added = fundStore.addWatchFund({
+    code: item.code,
+    name: item.name,
+    tagId
+  })
+  showToast(added ? '已加入自选' : '当前分组已存在该基金')
 }
 
 const toggleWatch = (item: SearchFundResult, event: Event) => {
-  // 点击右侧按钮切换当前标签的自选状态，不触发行点击跳转。
+  // 点击“加自选/已自选”：已自选则移除，未自选按分组逻辑添加。
   event.stopPropagation()
-  const changed = fundStore.toggleWatchFund({
-    code: item.code,
-    name: item.name,
-    tagId: activeWatchTagId.value
-  })
-  if (changed) {
-    showToast(isWatchFund(item.code) ? '已加入自选' : '已取消自选')
+  if (isWatchFund(item.code)) {
+    const removed = fundStore.removeWatchFund(item.code)
+    showToast(removed ? '已取消自选' : '当前基金不在自选列表')
+    return
   }
+
+  if (!hasCustomWatchTag.value) {
+    const targetTagId = allWatchTagId.value || activeWatchTagId.value
+    if (!targetTagId) {
+      showToast('暂无可用自选分组')
+      return
+    }
+    addWatchToTag(item, targetTagId)
+    return
+  }
+
+  pendingWatchFund.value = item
+  selectedWatchTagId.value = activeWatchTagId.value || allWatchTagId.value
+  groupPopupVisible.value = true
+}
+
+const closeGroupPopup = () => {
+  // 关闭分组弹窗并清理待加入基金。
+  groupPopupVisible.value = false
+  pendingWatchFund.value = null
+}
+
+const confirmAddWatchGroup = () => {
+  // 确认添加到选中的自选分组。
+  const item = pendingWatchFund.value
+  if (!item) {
+    closeGroupPopup()
+    return
+  }
+
+  const targetTagId = selectedWatchTagId.value || allWatchTagId.value || activeWatchTagId.value
+  if (!targetTagId) {
+    showToast('暂无可用自选分组')
+    closeGroupPopup()
+    return
+  }
+
+  addWatchToTag(item, targetTagId)
+  closeGroupPopup()
+}
+
+const openWatchTagManage = () => {
+  // 弹窗内点击“+新建”跳转自选标签管理。
+  closeGroupPopup()
+  router.push('/tag-manage?scene=watchlist')
 }
 
 const clearHistory = () => {
@@ -133,6 +226,11 @@ const clearHistory = () => {
 watch(
     keyword,
     (value) => {
+      if (suppressKeywordWatcher) {
+        suppressKeywordWatcher = false
+        return
+      }
+
       // 输入防抖：停止输入 1.5 秒后再发起搜索。
       if (debounceTimer) {
         clearTimeout(debounceTimer)
@@ -151,6 +249,18 @@ watch(
     },
     {flush: 'post'}
 )
+
+onMounted(() => {
+  // 从详情页返回搜索页时按 q 参数恢复回显列表。
+  const q = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  if (!q) {
+    return
+  }
+
+  suppressKeywordWatcher = true
+  keyword.value = q
+  void runSearch(q)
+})
 
 onBeforeUnmount(() => {
   // 组件销毁时清理防抖定时器。
@@ -205,13 +315,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else class="result-list">
-          <article v-for="item in results" :key="item.code" class="result-item" @click="clickResult(item)">
+          <article v-for="item in results" :key="item.code" class="result-item" @click="openDetail(item)">
             <div class="left">
               <strong>{{ item.name }}</strong>
               <span>{{ item.code }}</span>
             </div>
             <button
-                v-if="!isPickMode"
+                v-if="showWatchAction"
                 type="button"
                 class="watch-btn"
                 :class="{ active: isWatchFund(item.code) }"
@@ -219,11 +329,32 @@ onBeforeUnmount(() => {
             >
               {{ isWatchFund(item.code) ? '已自选' : '加自选' }}
             </button>
-            <span v-else class="pick-text">{{ pickActionText }}</span>
+            <button v-else type="button" class="pick-text-btn" @click="chooseFundByButton(item, $event)">
+              {{ pickActionText }}
+            </button>
           </article>
         </div>
       </template>
     </section>
+
+    <van-popup v-model:show="groupPopupVisible" position="bottom" round class="group-popup">
+      <div class="group-popup-head">
+        <button type="button" class="group-new-btn" @click="openWatchTagManage">+ 新建</button>
+        <strong>添加到以下分组</strong>
+        <button type="button" class="group-close-btn" @click="closeGroupPopup">
+          <van-icon name="cross" size="20"/>
+        </button>
+      </div>
+
+      <van-radio-group v-model="selectedWatchTagId" class="group-list">
+        <label v-for="tag in watchTags" :key="tag.id" class="group-item">
+          <van-radio :name="tag.id" checked-color="#2f5bd8"/>
+          <span>{{ tag.name }}</span>
+        </label>
+      </van-radio-group>
+
+      <button type="button" class="group-confirm-btn" @click="confirmAddWatchGroup">确认</button>
+    </van-popup>
   </div>
 </template>
 
@@ -358,9 +489,79 @@ onBeforeUnmount(() => {
   color: #8f96ab;
 }
 
-.pick-text {
+.watch-btn:disabled {
+  cursor: default;
+}
+
+.pick-text-btn {
+  border: 0;
+  background: transparent;
   color: #2f5bd8;
   font-size: 0.875rem;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.group-popup {
+  max-height: 70vh;
+  overflow: hidden;
+}
+
+.group-popup-head {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.group-popup-head strong {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #111a37;
+}
+
+.group-new-btn,
+.group-close-btn {
+  border: 0;
+  background: transparent;
+  color: #2f5bd8;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.group-close-btn {
+  color: #b6bccd;
+  display: inline-flex;
+  align-items: center;
+}
+
+.group-list {
+  max-height: calc(70vh - 134px);
+  overflow-y: auto;
+}
+
+.group-item {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.0625rem;
+  color: #111a37;
+}
+
+.group-confirm-btn {
+  width: 100%;
+  height: 62px;
+  border: 0;
+  background: #fff;
+  color: #101a39;
+  font-size: 1.125rem;
+  font-weight: 700;
+  border-top: 1px solid #dde2f1;
+  cursor: pointer;
 }
 </style>

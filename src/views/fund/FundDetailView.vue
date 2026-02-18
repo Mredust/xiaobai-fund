@@ -31,6 +31,14 @@ const showMoreSheet = ref(false)
 const intradayXAxisLabels = ['9:30', '11:30/13:00', '15:00']
 
 const code = computed(() => String(route.params.code || '').trim())
+const backToPath = computed(() => {
+  // 来自搜索列表时，返回目标优先回到搜索页回显结果。
+  const from = route.query.from
+  if (typeof from !== 'string' || !from.startsWith('/fund-search')) {
+    return ''
+  }
+  return from
+})
 
 const positionInfo = computed(() => {
   // 读取当前基金持仓信息，缺失时回退默认值。
@@ -311,7 +319,7 @@ watch(
 
 <template>
   <div class="page fund-detail-page">
-    <BaseTopNav class="fund-top-nav" :title="appName"/>
+    <BaseTopNav class="fund-top-nav" :title="appName" :back-to="backToPath"/>
 
     <section v-if="loading" class="card loading-card">
       <van-loading size="28"/>

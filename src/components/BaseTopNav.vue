@@ -5,6 +5,7 @@ const props = withDefaults(
   defineProps<{
     title: string
     showLeft?: boolean
+    backTo?: string
   }>(),
   {
     showLeft: true
@@ -14,6 +15,12 @@ const props = withDefaults(
 const router = useRouter()
 
 const goBack = () => {
+  // 指定返回地址时优先回到目标页（如搜索结果页）。
+  if (props.backTo && props.backTo.startsWith('/')) {
+    router.replace(props.backTo)
+    return
+  }
+
   // 优先回退历史记录，若无历史则回首页，避免空白页。
   if (window.history.length > 1) {
     router.back()
@@ -71,4 +78,3 @@ const goBack = () => {
   cursor: pointer;
 }
 </style>
-

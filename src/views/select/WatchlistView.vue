@@ -103,7 +103,6 @@ const syncWatchTopHeight = () => {
 const onRefresh = async () => {
   // 按当前列表 code 数组批量拉取估值数据。
   try {
-    console.log('自选数据刷新')
     if (syncingQuotes.value) {
       return
     }
@@ -157,13 +156,6 @@ watch(
     () => {
       void nextTick(syncWatchTopHeight)
     }
-)
-
-watch(
-  () => watchFundCodes.value.join(','),
-  () => {
-    void onRefresh()
-  }
 )
 </script>
 
