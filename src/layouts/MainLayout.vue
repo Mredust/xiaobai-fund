@@ -29,8 +29,13 @@ const showCommonHeader = computed(() => {
 })
 
 const goSearch = () => {
-  // Navigate to fund search page when clicking header search icon.
-  router.push('/fund-search')
+  // 进入搜索页时带上来源 tab，供回显页返回时定向回到对应 tabbar 页面。
+  router.push({
+    path: '/fund-search',
+    query: {
+      tab: active.value
+    }
+  })
 }
 </script>
 

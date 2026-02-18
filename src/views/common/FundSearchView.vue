@@ -20,6 +20,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 const historyList = computed(() => fundStore.searchHistory)
+const tabRouteWhitelist = new Set(['/holdings', '/watchlist', '/market', '/profile'])
 const pickMode = computed(() => String(route.query.mode || ''))
 const isPickMode = computed(
     () => pickMode.value === 'pick' || pickMode.value === 'pick-convert' || pickMode.value === 'pick-import'
@@ -39,6 +40,23 @@ const watchTags = computed(() => tagStore.watchTags)
 const watchedCodeSet = computed(() => new Set(fundStore.watchFundCodes))
 const allWatchTagId = computed(() => watchTags.value.find((item) => item.name === TAG_NAME_ALL)?.id ?? 0)
 const hasCustomWatchTag = computed(() => watchTags.value.some((item) => item.name !== TAG_NAME_ALL))
+const topNavBackTo = computed(() => {
+  // 回显页（replay=1）返回时直接回到来源 tab，避免再落回搜索首层页。
+  if (route.query.replay !== '1') {
+    return ''
+  }
+
+  if (isPickMode.value) {
+    const from = typeof route.query.from === 'string' ? route.query.from.trim() : ''
+    return from.startsWith('/') ? from : ''
+  }
+
+  const tab = typeof route.query.tab === 'string' ? route.query.tab : ''
+  if (tabRouteWhitelist.has(tab)) {
+    return tab
+  }
+  return '/holdings'
+})
 
 const groupPopupVisible = ref(false)
 const pendingWatchFund = ref<SearchFundResult | null>(null)
@@ -74,11 +92,11 @@ const manualSearch = () => {
   void runSearch(keyword.value)
 }
 
-const buildSearchBackPath = () => {
-  // 构造“详情页返回搜索页”的目标地址，保留 mode/scene 并写入当前关键词。
+const buildSearchPath = (options?: { replay?: boolean }) => {
+  // 构造搜索页地址：保留 mode/scene，并按当前关键词写入 q。
   const query: Record<string, string> = {}
   Object.entries(route.query).forEach(([key, value]) => {
-    if (key === 'from') {
+    if (key === 'replay') {
       return
     }
     if (typeof value === 'string' && value.trim()) {
@@ -95,6 +113,10 @@ const buildSearchBackPath = () => {
     query.q = q
   } else {
     delete query.q
+  }
+
+  if (options?.replay) {
+    query.replay = '1'
   }
 
   return router.resolve({path: '/fund-search', query}).fullPath
@@ -142,14 +164,21 @@ const chooseFundByButton = (item: SearchFundResult, event: Event) => {
   chooseFund(item)
 }
 
-const openDetail = (item: SearchFundResult) => {
-  // 普通模式点击结果进入基金详情页。
+const openDetail = async (item: SearchFundResult) => {
+  // 普通模式点击结果进入基金详情页，并维护“搜索页 -> 回显页 -> 详情页”的路由栈。
   fundStore.recordSearchHistory(item)
-  router.push({
-    path: `/fund/${item.code}`,
-    query: {
-      from: buildSearchBackPath()
+
+  const replayPath = buildSearchPath({ replay: true })
+  if (route.fullPath !== replayPath) {
+    if (route.query.replay === '1') {
+      await router.replace(replayPath)
+    } else {
+      await router.push(replayPath)
     }
+  }
+
+  await router.push({
+    path: `/fund/${item.code}`
   })
 }
 
@@ -273,7 +302,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page card fund-search-page">
-    <BaseTopNav title="搜索"/>
+    <BaseTopNav title="搜索" :back-to="topNavBackTo" class="search-top-nav"/>
 
     <section class="search-panel card">
       <div class="search-row">
@@ -289,51 +318,55 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-if="!hasKeyword">
-        <div class="section-head">
-          <strong>搜索历史</strong>
-          <button type="button" class="clear-btn" @click="clearHistory">
-            <van-icon name="delete-o" size="18"/>
-          </button>
-        </div>
+        <div class="history-wrap">
+          <div class="section-head">
+            <strong>搜索历史</strong>
+            <button type="button" class="clear-btn" @click="clearHistory">
+              <van-icon name="delete-o" size="18"/>
+            </button>
+          </div>
 
-        <div class="history-grid">
-          <button v-for="item in historyList" :key="item.code" type="button" class="history-item"
-                  @click="selectHistory(item)">
-            <strong class="history-name">{{ item.name }}</strong>
-            <span class="history-code">{{ item.code }}</span>
-          </button>
+          <div class="history-grid">
+            <button v-for="item in historyList" :key="item.code" type="button" class="history-item"
+                    @click="selectHistory(item)">
+              <strong class="history-name">{{ item.name }}</strong>
+              <span class="history-code">{{ item.code }}</span>
+            </button>
+          </div>
         </div>
       </template>
 
       <template v-else>
-        <div v-if="loading" class="loading-wrap">
-          <van-loading type="spinner" size="24"/>
-          <span>搜索中...</span>
-        </div>
+        <div class="result-scroll">
+          <div v-if="loading" class="loading-wrap">
+            <van-loading type="spinner" size="24"/>
+            <span>搜索中...</span>
+          </div>
 
-        <div v-else-if="results.length === 0" class="loading-wrap">
-          <van-empty image="search" description="未搜索到基金"/>
-        </div>
+          <div v-else-if="results.length === 0" class="loading-wrap">
+            <van-empty image="search" description="未搜索到基金"/>
+          </div>
 
-        <div v-else class="result-list">
-          <article v-for="item in results" :key="item.code" class="result-item" @click="openDetail(item)">
-            <div class="left">
-              <strong>{{ item.name }}</strong>
-              <span>{{ item.code }}</span>
-            </div>
-            <button
-                v-if="showWatchAction"
-                type="button"
-                class="watch-btn"
-                :class="{ active: isWatchFund(item.code) }"
-                @click="toggleWatch(item, $event)"
-            >
-              {{ isWatchFund(item.code) ? '已自选' : '加自选' }}
-            </button>
-            <button v-else type="button" class="pick-text-btn" @click="chooseFundByButton(item, $event)">
-              {{ pickActionText }}
-            </button>
-          </article>
+          <div v-else class="result-list">
+            <article v-for="item in results" :key="item.code" class="result-item" @click="openDetail(item)">
+              <div class="left">
+                <strong>{{ item.name }}</strong>
+                <span>{{ item.code }}</span>
+              </div>
+              <button
+                  v-if="showWatchAction"
+                  type="button"
+                  class="watch-btn"
+                  :class="{ active: isWatchFund(item.code) }"
+                  @click="toggleWatch(item, $event)"
+              >
+                {{ isWatchFund(item.code) ? '已自选' : '加自选' }}
+              </button>
+              <button v-else type="button" class="pick-text-btn" @click="chooseFundByButton(item, $event)">
+                {{ pickActionText }}
+              </button>
+            </article>
+          </div>
         </div>
       </template>
     </section>
@@ -370,18 +403,49 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .fund-search-page {
+  --search-nav-height: calc(3.125rem + env(safe-area-inset-top));
   padding-top: 0;
   height: 100vh;
+  overflow: hidden;
+}
+
+.search-top-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 25;
+  padding-top: env(safe-area-inset-top);
 }
 
 .search-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--search-nav-height);
+  bottom: 0;
   padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .search-row {
   display: flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+.history-wrap {
+  margin-top: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding-top: 44px;
 }
 
 .search-field {
@@ -404,10 +468,17 @@ onBeforeUnmount(() => {
 }
 
 .section-head {
-  margin-top: 20px;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(var(--search-nav-height) + 12px + 44px + 10px);
+  z-index: 24;
+  margin-top: 0;
+  min-height: 36px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #fff;
 }
 
 .section-head strong {
@@ -424,7 +495,7 @@ onBeforeUnmount(() => {
 }
 
 .history-grid {
-  margin-top: 8px;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -463,6 +534,7 @@ onBeforeUnmount(() => {
 
 .loading-wrap {
   min-height: 220px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -472,7 +544,15 @@ onBeforeUnmount(() => {
 }
 
 .result-list {
+  margin-top: 0;
+}
+
+.result-scroll {
   margin-top: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
 
 .result-item {
