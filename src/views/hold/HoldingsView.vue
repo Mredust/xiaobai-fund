@@ -1,13 +1,14 @@
 ﻿<script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
+import {showToast} from 'vant'
 import TagStrip from '@/components/TagStrip.vue'
 import SummaryScrollHead from '@/views/hold/components/SummaryScrollHead.vue'
 import {buildMiniTrendPath} from '@/utils/chart'
 import {formatPercent, formatSignedNumber} from '@/utils/format'
 import {toSafeNumber} from '@/utils/number'
 import {HOLDING_ACCOUNT_SUMMARY_NAME, TAG_NAME_ALL, useTagStore} from '@/stores/tags'
-import {useFundStore} from '@/stores/funds'
+import {type WatchFundItem, useFundStore} from '@/stores/funds'
 
 interface SummaryCardItem {
   tagId: number
@@ -217,6 +218,134 @@ const toFundDetail = (code: string) => {
   router.push(`/fund/${code}`)
 }
 
+const showFundActionPopup = ref(false)
+const showMoveGroupDialog = ref(false)
+const actionFund = ref<WatchFundItem | null>(null)
+const moveTargetTagId = ref(0)
+const keepFundInSourceTag = ref(false)
+const suppressNextFundClick = ref(false)
+let longPressTimer: number | null = null
+
+const movableHoldingTags = computed(() =>
+  tags.value.filter((item) => item.name !== HOLDING_ACCOUNT_SUMMARY_NAME)
+)
+
+const clearLongPressTimer = () => {
+  if (longPressTimer !== null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+const openFundActions = (item: WatchFundItem) => {
+  actionFund.value = item
+  showFundActionPopup.value = true
+}
+
+const onFundTouchStart = (item: WatchFundItem, event: TouchEvent) => {
+  if (event.touches.length > 1) {
+    return
+  }
+
+  clearLongPressTimer()
+  longPressTimer = window.setTimeout(() => {
+    suppressNextFundClick.value = true
+    openFundActions(item)
+  }, 450)
+}
+
+const onFundTouchEnd = () => {
+  clearLongPressTimer()
+}
+
+const onFundItemClick = (item: WatchFundItem) => {
+  if (suppressNextFundClick.value) {
+    suppressNextFundClick.value = false
+    return
+  }
+
+  toFundDetail(item.code)
+}
+
+const getSourceTagIds = (code: string) => {
+  // 当前在“全部”标签时，来源标签为包含该基金的全部分组。
+  if (isAllTab.value) {
+    return movableHoldingTags.value
+      .filter((tag) => fundStore.getHoldingFundsByTag(tag.id).some((fund) => fund.code === code))
+      .map((tag) => tag.id)
+  }
+
+  return [activeTagId.value]
+}
+
+const openMoveGroupDialog = () => {
+  const targetFund = actionFund.value
+  if (!targetFund) {
+    showFundActionPopup.value = false
+    return
+  }
+
+  const sourceTagIds = getSourceTagIds(targetFund.code)
+  const preferredTag =
+    movableHoldingTags.value.find((item) => !sourceTagIds.includes(item.id)) || movableHoldingTags.value[0] || null
+
+  if (!preferredTag) {
+    showToast('暂无可用分组')
+    return
+  }
+
+  moveTargetTagId.value = preferredTag.id
+  keepFundInSourceTag.value = false
+  showFundActionPopup.value = false
+  showMoveGroupDialog.value = true
+}
+
+const closeMoveGroupDialog = () => {
+  showMoveGroupDialog.value = false
+}
+
+const confirmMoveGroup = () => {
+  const targetFund = actionFund.value
+  if (!targetFund) {
+    closeMoveGroupDialog()
+    return
+  }
+
+  const targetTagId = moveTargetTagId.value
+  if (!targetTagId) {
+    showToast('请选择目标分组')
+    return
+  }
+
+  const sourceTagIds = getSourceTagIds(targetFund.code)
+  const amount = toSafeNumber(fundStore.positionByCode[targetFund.code]?.amount)
+  const profit = toSafeNumber(fundStore.positionByCode[targetFund.code]?.profit)
+
+  fundStore.addHoldingFund({
+    tagId: targetTagId,
+    code: targetFund.code,
+    name: targetFund.name,
+    amount,
+    profit
+  })
+
+  if (!keepFundInSourceTag.value) {
+    sourceTagIds
+      .filter((tagId) => tagId !== targetTagId)
+      .forEach((tagId) => {
+        fundStore.removeHoldingFund(targetFund.code, tagId)
+      })
+  }
+
+  closeMoveGroupDialog()
+  showToast(keepFundInSourceTag.value ? '已添加到目标分组' : '已移动到目标分组')
+}
+
+const openHoldingTagManage = () => {
+  closeMoveGroupDialog()
+  router.push('/tag-manage?scene=holdings')
+}
+
 const openCategoryTag = (tagId: number) => {
   // 点击分类卡片切换到对应标签页面。
   tagStore.setHoldingActive(tagId)
@@ -272,12 +401,28 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearLongPressTimer()
   window.removeEventListener('resize', syncHoldingsTopHeight)
   if (refreshTimer !== null) {
     window.clearInterval(refreshTimer)
     refreshTimer = null
   }
 })
+
+watch(
+    [showMoveGroupDialog, movableHoldingTags],
+    ([visible]) => {
+      if (!visible) {
+        return
+      }
+
+      if (movableHoldingTags.value.some((item) => item.id === moveTargetTagId.value)) {
+        return
+      }
+
+      moveTargetTagId.value = movableHoldingTags.value[0]?.id || 0
+    }
+)
 
 watch(
     () => tags.value.length,
@@ -389,7 +534,17 @@ watch(
       </div>
 
       <div class="fund-list">
-        <article v-for="item in displayFunds" :key="item.id" class="fund-item" @click="toFundDetail(item.code)">
+        <article
+            v-for="item in displayFunds"
+            :key="item.id"
+            class="fund-item"
+            @click="onFundItemClick(item)"
+            @contextmenu.prevent="openFundActions(item)"
+            @touchstart.passive="onFundTouchStart(item, $event)"
+            @touchend="onFundTouchEnd"
+            @touchcancel="onFundTouchEnd"
+            @touchmove="onFundTouchEnd"
+        >
           <div class="left">
             <strong :title="item.name">{{ truncateFundName(item.name) }}</strong>
             <span>{{ item.code }}</span>
@@ -434,6 +589,52 @@ watch(
         </van-empty>
       </div>
     </section>
+
+    <van-popup v-model:show="showFundActionPopup" position="bottom" round class="action-popup">
+      <div class="action-popup-title">{{ actionFund?.name }}({{ actionFund?.code }})</div>
+      <div class="action-grid">
+        <button type="button" class="action-btn" @click="openMoveGroupDialog">
+          <van-icon name="share-o" size="22"/>
+          <span>移动分组</span>
+        </button>
+      </div>
+    </van-popup>
+
+    <van-popup v-model:show="showMoveGroupDialog" round class="move-dialog">
+      <div class="move-dialog-head">
+        <strong>移动到如下分组</strong>
+      </div>
+
+      <van-radio-group v-model="moveTargetTagId" class="move-dialog-list">
+        <div
+            v-for="tag in movableHoldingTags"
+            :key="tag.id"
+            class="move-dialog-item"
+            role="button"
+            tabindex="0"
+            @click="moveTargetTagId = tag.id"
+            @keydown.enter.prevent="moveTargetTagId = tag.id"
+            @keydown.space.prevent="moveTargetTagId = tag.id"
+        >
+          <van-radio :name="tag.id" checked-color="#2f5bd8"/>
+          <span>{{ tag.name }}</span>
+        </div>
+      </van-radio-group>
+
+      <button type="button" class="move-dialog-new-btn" @click="openHoldingTagManage">
+        + 新建账户
+      </button>
+
+      <label class="keep-origin-row">
+        <van-checkbox v-model="keepFundInSourceTag" checked-color="#ff9800"/>
+        <span>原标签保留该基金</span>
+      </label>
+
+      <div class="move-dialog-actions">
+        <button type="button" class="dialog-btn" @click="closeMoveGroupDialog">取消</button>
+        <button type="button" class="dialog-btn primary" @click="confirmMoveGroup">确定</button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -520,7 +721,6 @@ watch(
 }
 
 .compare-arrow {
-  margin-top: -5px;
   margin-left: 5px;
 }
 
@@ -639,7 +839,6 @@ watch(
 }
 
 .stats-arrow {
-  margin-top: -5px;
   margin-left: 2px;
 }
 
@@ -793,5 +992,125 @@ watch(
   gap: 4px;
   padding: 0;
   cursor: pointer;
+}
+
+.action-popup {
+  overflow: hidden;
+}
+
+.action-popup-title {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  color: #20273f;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.action-grid {
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+}
+
+.action-btn {
+  width: 100%;
+  min-height: 68px;
+  border: 0;
+  background: #fff;
+  color: #1d2541;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.move-dialog {
+  width: min(92vw, 430px);
+  overflow: hidden;
+}
+
+.move-dialog-head {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.move-dialog-head strong {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #101a39;
+}
+
+.move-dialog-list {
+  max-height: min(48vh, 320px);
+  overflow-y: auto;
+}
+
+.move-dialog-item {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.125rem;
+  color: #111a37;
+  cursor: pointer;
+}
+
+.move-dialog-new-btn {
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  text-align: left;
+  padding: 0 16px;
+  font-size: 1.0625rem;
+  color: #2f5bd8;
+  cursor: pointer;
+}
+
+.keep-origin-row {
+  min-height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9375rem;
+  color: #253054;
+}
+
+.move-dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.dialog-btn {
+  min-height: 56px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: #fff;
+  color: #7e8498;
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.dialog-btn:last-child {
+  border-right: 0;
+}
+
+.dialog-btn.primary {
+  color: #2f5bd8;
 }
 </style>

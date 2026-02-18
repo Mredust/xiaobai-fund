@@ -43,6 +43,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/common/ImportHoldingsView.vue')
   },
   {
+    path: '/watchlist/batch-edit',
+    name: 'watchlist-batch-edit',
+    component: () => import('@/views/select/WatchlistBatchEditView.vue')
+  },
+  {
     path: '/manual-holdings',
     name: 'manual-holdings',
     component: () => import('@/views/hold/ManualHoldingsView.vue')

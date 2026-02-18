@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
+import {showToast} from 'vant'
 import TagStrip from '@/components/TagStrip.vue'
 import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
 import {type WatchFundItem, useFundStore} from '@/stores/funds'
@@ -20,15 +21,12 @@ const isAllWatchTag = computed(() => {
 })
 
 const watchFunds = computed(() => {
-  // “全部”标签聚合其他标签基金并去重，其他标签按自身读取。
+  // “全部”标签按标签管理页下全部分组去重汇总展示。
   if (isAllWatchTag.value) {
     const mergedCodes = new Set<string>()
     const mergedFunds: WatchFundItem[] = []
-    const nonAllTags = watchTags.value.filter((item) => item.name !== TAG_NAME_ALL)
-    const allTag = watchTags.value.find((item) => item.name === TAG_NAME_ALL)
-    const collectTags = allTag ? [...nonAllTags, allTag] : nonAllTags
 
-    collectTags.forEach((tag) => {
+    watchTags.value.forEach((tag) => {
       fundStore.getWatchFundsByTag(tag.id).forEach((item) => {
         if (mergedCodes.has(item.code)) {
           return
@@ -89,6 +87,64 @@ const toDetail = (code: string) => {
   router.push(`/fund/${code}`)
 }
 
+const showFundActionPopup = ref(false)
+const actionFund = ref<WatchFundItem | null>(null)
+const suppressNextClick = ref(false)
+let longPressTimer: number | null = null
+
+const clearLongPressTimer = () => {
+  if (longPressTimer !== null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+const openFundActions = (item: WatchFundItem) => {
+  actionFund.value = item
+  showFundActionPopup.value = true
+}
+
+const onFundTouchStart = (item: WatchFundItem, event: TouchEvent) => {
+  if (event.touches.length > 1) {
+    return
+  }
+
+  clearLongPressTimer()
+  longPressTimer = window.setTimeout(() => {
+    suppressNextClick.value = true
+    openFundActions(item)
+  }, 450)
+}
+
+const onFundTouchEnd = () => {
+  clearLongPressTimer()
+}
+
+const onFundClick = (item: WatchFundItem) => {
+  if (suppressNextClick.value) {
+    suppressNextClick.value = false
+    return
+  }
+
+  toDetail(item.code)
+}
+
+const openBatchEditPage = () => {
+  const tagId = activeWatchTagId.value
+  if (!tagId) {
+    showToast('当前标签不可用')
+    return
+  }
+
+  showFundActionPopup.value = false
+  router.push({
+    path: '/watchlist/batch-edit',
+    query: {
+      tagId: String(tagId)
+    }
+  })
+}
+
 const syncingQuotes = ref(false)
 let refreshTimer: number | null = null
 
@@ -144,6 +200,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearLongPressTimer()
   window.removeEventListener('resize', syncWatchTopHeight)
   if (refreshTimer !== null) {
     window.clearInterval(refreshTimer)
@@ -190,7 +247,17 @@ watch(
       </div>
 
       <template v-else>
-        <article v-for="item in watchFunds" :key="item.id" class="fund-row" @click="toDetail(item.code)">
+        <article
+            v-for="item in watchFunds"
+            :key="item.id"
+            class="fund-row"
+            @click="onFundClick(item)"
+            @contextmenu.prevent="openFundActions(item)"
+            @touchstart.passive="onFundTouchStart(item, $event)"
+            @touchend="onFundTouchEnd"
+            @touchcancel="onFundTouchEnd"
+            @touchmove="onFundTouchEnd"
+        >
           <div class="left">
             <strong>{{ item.name }}</strong>
             <span>{{ item.code }}</span>
@@ -214,6 +281,16 @@ watch(
         <span>新增自选</span>
       </button>
     </section>
+
+    <van-popup v-model:show="showFundActionPopup" position="bottom" round class="action-popup">
+      <div class="action-popup-title">{{ actionFund?.name }}({{ actionFund?.code }})</div>
+      <div class="action-grid">
+        <button type="button" class="action-btn" @click="openBatchEditPage">
+          <van-icon name="todo-list-o" size="22"/>
+          <span>批量编辑</span>
+        </button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -390,6 +467,42 @@ watch(
   max-width: 100%;
   padding: 10px 12px 0;
   overflow-x: hidden;
+}
+
+.action-popup {
+  overflow: hidden;
+}
+
+.action-popup-title {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  color: #20273f;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.action-grid {
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+}
+
+.action-btn {
+  width: 100%;
+  min-height: 68px;
+  border: 0;
+  background: #fff;
+  color: #1d2541;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 1rem;
+  cursor: pointer;
 }
 
 @keyframes spin {
