@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="page fund-search-page">
+  <div class="page card fund-search-page">
     <BaseTopNav title="搜索"/>
 
     <section class="search-panel card">
@@ -371,6 +371,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .fund-search-page {
   padding-top: 0;
+  height: 100vh;
 }
 
 .search-panel {
@@ -440,9 +441,10 @@ onBeforeUnmount(() => {
   overflow: visible;
   text-overflow: clip;
   word-break: break-all;
-  padding: 0;
+  padding: 5px 0;
   min-height: 28px;
   cursor: pointer;
+  border-bottom:1px solid #ecf0f1;
 }
 
 .history-name {
