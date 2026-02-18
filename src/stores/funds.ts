@@ -387,6 +387,48 @@ export const useFundStore = defineStore('funds', {
       const codes = list.map((item) => item.code)
       await this.refreshWatchFundsByCodes(codes)
     },
+    async refreshHoldingFundsByCodes(codes: string[]) {
+      // 按 code 数组批量刷新持有快照，统一回填各标签中的同 code 基金。
+      const uniqueCodes = Array.from(
+        new Set(
+          (codes || [])
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+        )
+      )
+
+      if (uniqueCodes.length === 0) {
+        return
+      }
+
+      const snapshots = await fetchFundEstimatesBatch(uniqueCodes)
+      const mergeSnapshot = (item: WatchFundItem) => {
+        const snapshot = snapshots.get(item.code)
+        if (!snapshot) {
+          return { ...item }
+        }
+
+        const estimateNav = snapshot.gsz
+        const lastNav = snapshot.dwjz
+        const nav = estimateNav > 0 ? estimateNav : lastNav > 0 ? lastNav : item.nav
+
+        return {
+          ...item,
+          name: item.name || snapshot.name || `基金${item.code}`,
+          dailyChange: snapshot.gszzl,
+          nav,
+          estimateTime: snapshot.gztime || item.estimateTime || '',
+          estimateNav,
+          lastNav
+        }
+      }
+
+      Object.keys(this.holdingFundsByTag).forEach((key) => {
+        const tagId = Number(key)
+        const list = this.holdingFundsByTag[tagId] || []
+        this.holdingFundsByTag[tagId] = list.map(mergeSnapshot)
+      })
+    },
     isHoldingFund(code: string) {
       // 判断基金是否存在于任一持有标签中。
       return Object.values(this.holdingFundsByTag).some((list) => list.some((item) => item.code === code))

@@ -27,6 +27,8 @@ const tagStore = useTagStore()
 const fundStore = useFundStore()
 const pageRef = ref<HTMLElement | null>(null)
 const holdingsTopRef = ref<HTMLElement | null>(null)
+const syncingQuotes = ref(false)
+let refreshTimer: number | null = null
 
 const tags = computed(() => tagStore.holdingTags)
 const activeTagId = computed(() => tagStore.activeHoldingTagId)
@@ -54,6 +56,16 @@ const displayFunds = computed(() => {
     return summaryTagList.value.flatMap((tag) => fundStore.getHoldingFundsByTag(tag.id))
   }
   return fundStore.getHoldingFundsByTag(activeTagId.value)
+})
+
+const holdingFundCodes = computed(() => {
+  // 读取全部持有标签的基金 code，并去重用于定时刷新。
+  return [
+    ...new Set(
+      Object.values(fundStore.holdingFundsByTag)
+        .flatMap((list) => list.map((item) => item.code))
+    )
+  ]
 })
 
 const currentScopeFunds = computed(() => {
@@ -196,13 +208,53 @@ const syncHoldingsTopHeight = () => {
   }
 }
 
+const onRefresh = async () => {
+  // 每分钟按全部持有基金 code 刷新估值快照。
+  try {
+    if (syncingQuotes.value) {
+      return
+    }
+
+    syncingQuotes.value = true
+    const codes = holdingFundCodes.value
+    if (codes.length === 0) {
+      return
+    }
+
+    const refreshByCodes = (fundStore as { refreshHoldingFundsByCodes?: (rows: string[]) => Promise<void> | void })
+      .refreshHoldingFundsByCodes
+
+    if (typeof refreshByCodes === 'function') {
+      await Promise.resolve(refreshByCodes(codes))
+      return
+    }
+
+    // 兜底：老版本 store 不存在刷新 action 时，保持引用更新触发视图刷新。
+    Object.keys(fundStore.holdingFundsByTag).forEach((key) => {
+      const tagId = Number(key)
+      const list = fundStore.getHoldingFundsByTag(tagId)
+      fundStore.holdingFundsByTag[tagId] = list.map((item) => ({ ...item }))
+    })
+  } finally {
+    syncingQuotes.value = false
+  }
+}
+
 onMounted(() => {
   void nextTick(syncHoldingsTopHeight)
   window.addEventListener('resize', syncHoldingsTopHeight)
+  void onRefresh()
+  refreshTimer = window.setInterval(() => {
+    void onRefresh()
+  }, 60_000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncHoldingsTopHeight)
+  if (refreshTimer !== null) {
+    window.clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 
 watch(
@@ -646,7 +698,8 @@ watch(
 }
 
 .fund-item .left strong {
-  font-size: 0.8rem;
+  font-size: 1rem;
+  font-weight: 400;
 }
 
 .fund-item .left span {
@@ -654,7 +707,7 @@ watch(
 }
 
 .fund-item .fund-metric strong {
-  font-size: 0.8rem;
+  font-size: 1em;
   line-height: 1.1;
   color: #1f2741;
 }
