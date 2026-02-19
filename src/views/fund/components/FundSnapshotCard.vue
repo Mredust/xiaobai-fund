@@ -10,11 +10,38 @@ const props = defineProps<{
   dateText: string
   position?: PositionInfo | null
   showPosition?: boolean
+  plainNav?: boolean
 }>()
 
 const changeText = computed(() => {
   // 统一输出基金涨跌幅文本。
-  return `${props.changePercent >= 0 ? '+' : ''}${props.changePercent.toFixed(2)}%`
+  if (props.changePercent === 0) {
+    return '0.00%'
+  }
+  return `${props.changePercent > 0 ? '+' : ''}${props.changePercent.toFixed(2)}%`
+})
+
+const changeClass = computed(() => {
+  if (props.changePercent > 0) {
+    return 'up'
+  }
+  if (props.changePercent < 0) {
+    return 'down'
+  }
+  return 'flat'
+})
+
+const navText = computed(() => {
+  const value = Number(props.nav)
+  return Number.isFinite(value) && value > 0 ? value.toFixed(4) : '--'
+})
+
+const positionProfitClass = computed(() => {
+  const value = Number(props.position?.profit || 0)
+  if (!Number.isFinite(value) || value === 0) {
+    return 'flat'
+  }
+  return value > 0 ? 'up' : 'down'
 })
 </script>
 
@@ -27,8 +54,8 @@ const changeText = computed(() => {
 
     <div class="fund-nav-row">
       <span>最新净值 ({{ dateText }})：</span>
-      <strong>{{ nav.toFixed(4) }}</strong>
-      <strong :class="changePercent >= 0 ? 'up' : 'down'">{{ changeText }}</strong>
+      <span class="nav-value" :class="{ plain: plainNav }">{{ navText }}</span>
+      <span class="change-value" :class="changeClass">{{ changeText }}</span>
     </div>
 
     <div v-if="showPosition && position" class="position-grid">
@@ -38,7 +65,7 @@ const changeText = computed(() => {
       </div>
       <div class="grid-item">
         <span>持有收益</span>
-        <strong :class="Number(position.profit) >= 0 ? 'up' : 'down'">{{ position.profit }}</strong>
+        <strong :class="positionProfitClass">{{ position.profit }}</strong>
       </div>
       <div class="grid-item">
         <span>持有天数</span>
@@ -83,6 +110,22 @@ const changeText = computed(() => {
   color: #20253a;
 }
 
+.nav-value {
+  font-size: 1rem;
+  color: #20253a;
+  font-weight: 600;
+}
+
+.nav-value.plain {
+  font-weight: 400;
+  color: #71788e;
+}
+
+.change-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .position-grid {
   margin-top: 12px;
   border-top: 1px solid var(--line);
@@ -106,6 +149,18 @@ const changeText = computed(() => {
 .grid-item strong {
   font-size: 1.25rem;
   line-height: 1.1;
+}
+
+.up {
+  color: #e34a4a;
+}
+
+.down {
+  color: #22a06b;
+}
+
+.flat {
+  color: #b9bfcc;
 }
 </style>
 

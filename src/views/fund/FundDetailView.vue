@@ -1,14 +1,14 @@
 ﻿<script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import {computed, ref, watch} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {showConfirmDialog, showToast} from 'vant'
 import BaseTopNav from '@/components/BaseTopNav.vue'
 import TrendChart from '@/views/fund/components/TrendChart.vue'
-import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
-import { useFundStore } from '@/stores/funds'
-import { TAG_NAME_ALL, useTagStore } from '@/stores/tags'
-import { formatPercent, formatYmd } from '@/utils/format'
-import { globalSettings } from '@/config/global.ts'
+import {fetchFundData, type FundDetailResult} from '@/api/fundApi'
+import {useFundStore} from '@/stores/funds'
+import {TAG_NAME_ALL, useTagStore} from '@/stores/tags'
+import {formatPercent, formatYmd} from '@/utils/format'
+import {globalSettings} from '@/config/global.ts'
 
 const appName = globalSettings.appName
 const route = useRoute()
@@ -19,6 +19,7 @@ const tagStore = useTagStore()
 const COLOR_UP = '#e34a4a'
 const COLOR_DOWN = '#22a06b'
 const COLOR_FLAT = '#b9bfcc'
+const COLOR_PERFORMANCE_TREND = '#2c77f4'
 
 const loading = ref(false)
 const errorText = ref('')
@@ -173,7 +174,7 @@ const positionInfo = computed(() => {
 
   const dayRate = Number.isFinite(Number(detail.value?.gszzl)) ? Number(detail.value?.gszzl) : null
   const yesterdayProfit =
-    dayRate !== null && amount > 0 ? amount - amount / (1 + dayRate / 100) : parseMetricNumber(base.yesterdayProfit)
+      dayRate !== null && amount > 0 ? amount - amount / (1 + dayRate / 100) : parseMetricNumber(base.yesterdayProfit)
 
   return {
     amount: amount.toFixed(2),
@@ -185,19 +186,19 @@ const positionInfo = computed(() => {
     profit: profit.toFixed(2),
     profitValue: profit,
     profitRate:
-      profitRate !== null
-        ? `${profitRate > 0 ? '+' : ''}${profitRate.toFixed(2)}%`
-        : base.profitRate || '--',
+        profitRate !== null
+            ? `${profitRate > 0 ? '+' : ''}${profitRate.toFixed(2)}%`
+            : base.profitRate || '--',
     profitRateValue: profitRate,
     cost: cost !== null && cost > 0 ? cost.toFixed(4) : base.cost || '--',
     costValue: cost,
     yesterdayProfit:
-      yesterdayProfit !== null && Number.isFinite(yesterdayProfit)
-        ? yesterdayProfit.toFixed(2)
-        : base.yesterdayProfit || '--',
+        yesterdayProfit !== null && Number.isFinite(yesterdayProfit)
+            ? yesterdayProfit.toFixed(2)
+            : base.yesterdayProfit || '--',
     yesterdayProfitValue: yesterdayProfit,
     yesterdayProfitRate:
-      dayRate !== null ? `${dayRate > 0 ? '+' : ''}${dayRate.toFixed(2)}%` : base.yesterdayProfitRate || '--',
+        dayRate !== null ? `${dayRate > 0 ? '+' : ''}${dayRate.toFixed(2)}%` : base.yesterdayProfitRate || '--',
     yesterdayProfitRateValue: dayRate,
     holdingDays: base.holdingDays || '--'
   }
@@ -319,8 +320,62 @@ const costLineValue = computed(() => {
   return typeof cost === 'number' && Number.isFinite(cost) && cost > 0 ? cost : null
 })
 
+const tradeRecords = computed(() => fundStore.getTradeRecordsByCode(code.value))
+
+const toDateStart = (value: string) => {
+  const text = String(value || '').trim()
+  if (!text) {
+    return null
+  }
+  const onlyDate = text.slice(0, 10)
+  const parts = onlyDate.split('-')
+  if (parts.length !== 3) {
+    return null
+  }
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  const d = Number(parts[2])
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return null
+  }
+  return new Date(y, m - 1, d)
+}
+
+const performanceMarkers = computed(() => {
+  const points = trendByPeriod.value
+  if (!points.length || !tradeRecords.value.length) {
+    return [] as Array<{ index: number; color: string }>
+  }
+
+  return tradeRecords.value
+      .map((item) => {
+        const targetDate = toDateStart(item.tradeDate)
+        if (!targetDate) {
+          return null
+        }
+
+        let nearestIndex = 0
+        let nearestDistance = Number.POSITIVE_INFINITY
+        points.forEach((point, index) => {
+          const day = new Date(point.x)
+          const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate())
+          const distance = Math.abs(dayStart.getTime() - targetDate.getTime())
+          if (distance < nearestDistance) {
+            nearestDistance = distance
+            nearestIndex = index
+          }
+        })
+
+        return {
+          index: nearestIndex,
+          color: item.direction === 'buy' ? COLOR_UP : COLOR_DOWN
+        }
+      })
+      .filter((item): item is { index: number; color: string } => Boolean(item))
+})
+
 const intradayTrendColor = computed(() => getTrendColorByValue(parseMetricNumber(detail.value?.gszzl)))
-const performanceTrendColor = computed(() => getTrendColorByValue(selectedPeriodRangeChange.value))
+const performanceTrendColor = COLOR_PERFORMANCE_TREND
 
 const intradayTrend = computed(() => {
   // 分时图取最近 60 个点。
@@ -578,11 +633,15 @@ watch(
           </div>
           <div class="grid-cell">
             <span>昨日收益</span>
-            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfit)">{{ positionInfo.yesterdayProfit }}</strong>
+            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfit)">{{
+                positionInfo.yesterdayProfit
+              }}</strong>
           </div>
           <div class="grid-cell">
             <span>昨日收益率</span>
-            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfitRate)">{{ positionInfo.yesterdayProfitRate }}</strong>
+            <strong :class="getMetricTrendClass(positionInfo.yesterdayProfitRate)">{{
+                positionInfo.yesterdayProfitRate
+              }}</strong>
           </div>
           <div class="grid-cell">
             <span>持有天数</span>
@@ -646,11 +705,12 @@ watch(
               </div>
 
               <TrendChart
-                :points="trendByPeriod"
-                :color="performanceTrendColor"
-                :x-axis-labels="performanceXAxisLabels"
-                :cost-line-value="costLineValue"
-                cost-line-label="成本线"
+                  :points="trendByPeriod"
+                  :color="performanceTrendColor"
+                  :x-axis-labels="performanceXAxisLabels"
+                  :cost-line-value="costLineValue"
+                  cost-line-label="成本线"
+                  :markers="performanceMarkers"
               />
 
               <div class="period-switch">
@@ -773,14 +833,14 @@ watch(
 
       <van-radio-group v-model="selectedWatchTagId" class="group-list">
         <div
-          v-for="tag in watchTags"
-          :key="tag.id"
-          class="group-item"
-          role="button"
-          tabindex="0"
-          @click="selectedWatchTagId = tag.id"
-          @keydown.enter.prevent="selectedWatchTagId = tag.id"
-          @keydown.space.prevent="selectedWatchTagId = tag.id"
+            v-for="tag in watchTags"
+            :key="tag.id"
+            class="group-item"
+            role="button"
+            tabindex="0"
+            @click="selectedWatchTagId = tag.id"
+            @keydown.enter.prevent="selectedWatchTagId = tag.id"
+            @keydown.space.prevent="selectedWatchTagId = tag.id"
         >
           <van-radio :name="tag.id" checked-color="#2f5bd8"/>
           <span>{{ tag.name }}</span>
@@ -1103,6 +1163,7 @@ watch(
   min-height: 36px;
   font-size: 0.9375rem;
   border-bottom: 1px solid var(--line);
+  margin: 5px 0;
 }
 
 .detail-bottom-bar {

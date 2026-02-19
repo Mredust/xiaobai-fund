@@ -184,6 +184,11 @@ const formatNav = (value: number | undefined) => {
   return value.toFixed(4)
 }
 
+const formatHoldingAmount = (value: string | number | undefined | null) => {
+  const amount = toSafeNumber(value ?? 0)
+  return amount > 0 ? amount.toFixed(2) : '--'
+}
+
 const truncateFundName = (name: string, maxLength = 6) => {
   // 基金名称超过指定字数时追加省略号。
   const chars = Array.from(String(name || ''))
@@ -547,7 +552,7 @@ watch(
         >
           <div class="left">
             <strong :title="item.name">{{ truncateFundName(item.name) }}</strong>
-            <span>{{ item.code }}</span>
+            <span>{{ formatHoldingAmount(fundStore.positionByCode[item.code]?.amount) }}</span>
           </div>
           <div class="fund-metric">
             <strong :class="getMetricClass(fundStore.positionByCode[item.code]?.yesterdayProfit)">

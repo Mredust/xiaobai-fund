@@ -6,7 +6,10 @@ import BaseTopNav from '@/components/BaseTopNav.vue'
 import FundSnapshotCard from './components/FundSnapshotCard.vue'
 import { fetchFundData, type FundDetailResult } from '@/api/fundApi'
 import { useFundStore } from '@/stores/funds'
-import { formatYearMonthDayZh } from '@/utils/format'
+import {
+  formatMonthDayWeekLabel,
+  formatYmdDate
+} from '@/utils/trade'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,27 +22,11 @@ const showPeriodPicker = ref(false)
 const showTimePicker = ref(false)
 const periodText = ref('每周 周一')
 const timeText = ref('')
+const timeValue = ref('')
 
 const code = computed(() => String(route.params.code || '').trim())
 
-const position = computed(() => {
-  // 读取当前基金持仓信息，缺失时回退默认值。
-  return (
-    fundStore.positionByCode[code.value] || {
-      amount: '0.00',
-      ratio: '--',
-      cost: '--',
-      profit: '0.00',
-      profitRate: '--',
-      holdingDays: '0',
-      yesterdayProfit: '0.00',
-      yesterdayProfitRate: '--'
-    }
-  )
-})
-
 const dateText = computed(() => {
-  // 从估值时间中提取月-日文本。
   const raw = detail.value?.gztime || ''
   const datePart = raw.split(' ')[0] || ''
   if (!datePart.includes('-')) {
@@ -48,68 +35,107 @@ const dateText = computed(() => {
   return datePart.slice(5)
 })
 
+const currentNav = computed(() => {
+  const gsz = Number(detail.value?.gsz)
+  if (Number.isFinite(gsz) && gsz > 0) {
+    return gsz
+  }
+  const dwjz = Number(detail.value?.dwjz)
+  if (Number.isFinite(dwjz) && dwjz > 0) {
+    return dwjz
+  }
+  return 0
+})
+
+const weekOptions = [
+  { text: '周一', value: '周一' },
+  { text: '周二', value: '周二' },
+  { text: '周三', value: '周三' },
+  { text: '周四', value: '周四' },
+  { text: '周五', value: '周五' }
+]
+
+const monthDayOptions = computed(() => {
+  const now = new Date()
+  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  return Array.from({ length: days }, (_, index) => {
+    const day = index + 1
+    return {
+      text: `${day}日`,
+      value: String(day)
+    }
+  })
+})
+
 const periodColumns = computed(() => {
-  // 构造定投周期双列数据：周期 + 周几。
+  // 周期联动规则：周/双周=>周一至周五；每月=>当月日期；每日=>无需右侧选择。
   return [
-    [
-      { text: '每周', value: '每周' },
-      { text: '每两周', value: '每两周' },
-      { text: '每月', value: '每月' },
-      { text: '每日', value: '每日' }
-    ],
-    [
-      { text: '周一', value: '周一' },
-      { text: '周二', value: '周二' },
-      { text: '周三', value: '周三' },
-      { text: '周四', value: '周四' },
-      { text: '周五', value: '周五' }
-    ]
+    {
+      text: '每周',
+      value: '每周',
+      children: weekOptions
+    },
+    {
+      text: '每两周',
+      value: '每两周',
+      children: weekOptions
+    },
+    {
+      text: '每月',
+      value: '每月',
+      children: monthDayOptions.value
+    },
+    {
+      text: '每日',
+      value: '每日',
+      children: [{ text: '无需选择', value: '无需选择' }]
+    }
   ]
 })
 
 const timeColumns = computed(() => {
-  // 构造未来 10 个可选定投日期。
   const rows = Array.from({ length: 10 }, (_, index) => {
     const date = new Date()
-    date.setDate(date.getDate() + 3 + index * 7)
-    const text = formatYearMonthDayZh(date)
-    return { text, value: text }
+    date.setDate(date.getDate() + index * 7)
+    return {
+      text: formatMonthDayWeekLabel(date),
+      value: formatYmdDate(date)
+    }
   })
   return [rows]
 })
 
 const canSubmit = computed(() => {
-  // 完成按钮校验：金额、周期、时间均需有效。
-  return Number(amount.value) > 0 && Boolean(periodText.value) && Boolean(timeText.value)
+  return Number(amount.value) > 0 && Boolean(periodText.value) && Boolean(timeValue.value)
 })
 
 const openPeriodPicker = () => {
-  // 打开定投周期选择弹窗。
   showPeriodPicker.value = true
 }
 
 const openTimePicker = () => {
-  // 打开定投时间选择弹窗。
+  // 打开时默认落在“今天”对应项。
+  timeValue.value = timeColumns.value[0]?.[0]?.value || timeValue.value
+  timeText.value = timeColumns.value[0]?.[0]?.text || timeText.value
   showTimePicker.value = true
 }
 
 const confirmPeriod = (payload: { selectedOptions?: Array<{ text?: string }> }) => {
-  // 确认定投周期选择并回填。
   const first = payload.selectedOptions?.[0]?.text || '每周'
-  const second = payload.selectedOptions?.[1]?.text || '周一'
-  periodText.value = `${first} ${second}`
+  const second = payload.selectedOptions?.[1]?.text || ''
+  periodText.value = first === '每日' ? '每日' : second ? `${first} ${second}` : first
   showPeriodPicker.value = false
 }
 
-const confirmTime = (payload: { selectedOptions?: Array<{ text?: string }> }) => {
-  // 确认定投时间选择并回填。
-  const first = payload.selectedOptions?.[0]?.text || ''
-  timeText.value = first
+const confirmTime = (payload: { selectedOptions?: Array<{ text?: string; value?: string }> }) => {
+  const firstText = payload.selectedOptions?.[0]?.text || ''
+  const firstValue = payload.selectedOptions?.[0]?.value || ''
+  timeText.value = firstText
+  timeValue.value = firstValue
   showTimePicker.value = false
 }
 
 const loadDetail = async () => {
-  // 加载基金详情数据用于头部展示。
   if (!code.value) {
     detail.value = null
     return
@@ -127,20 +153,31 @@ const loadDetail = async () => {
 }
 
 const submitPlan = () => {
-  // 提交定投计划并返回定投列表页。
-  if (!canSubmit.value) {
+  if (!detail.value || !canSubmit.value) {
     showToast('请完善定投参数')
     return
   }
 
+  const created = fundStore.addSipPlan({
+    code: code.value,
+    fundName: detail.value.name,
+    amount: Number(amount.value),
+    periodText: periodText.value,
+    nextRunDate: timeValue.value
+  })
+  if (!created) {
+    showToast('定投计划保存失败')
+    return
+  }
+
+  fundStore.runDueSipPlans()
   showToast('定投计划已设置')
-  router.replace(`/fund/${code.value}/sip`)
+  void router.replace(`/fund/${code.value}/sip`)
 }
 
 watch(
   () => code.value,
   () => {
-    // 基金代码变化时重新拉取详情。
     void loadDetail()
   },
   { immediate: true }
@@ -149,9 +186,10 @@ watch(
 watch(
   () => timeColumns.value,
   () => {
-    // 首次进入页面时默认选中第一个可选定投日期。
     if (!timeText.value) {
-      timeText.value = timeColumns.value[0]?.[0]?.text || ''
+      const first = timeColumns.value[0]?.[0]
+      timeText.value = first?.text || ''
+      timeValue.value = first?.value || ''
     }
   },
   { immediate: true }
@@ -170,11 +208,9 @@ watch(
       <FundSnapshotCard
         :name="detail.name"
         :code="detail.code"
-        :nav="detail.gsz"
+        :nav="currentNav"
         :change-percent="detail.gszzl"
         :date-text="dateText"
-        :position="position"
-        show-position
       />
 
       <section class="card form-card">
@@ -201,7 +237,7 @@ watch(
       </section>
 
       <section class="submit-wrap">
-        <van-button block round type="primary" color="#4b6bde" :disabled="!canSubmit" @click="submitPlan">完成设置</van-button>
+        <van-button type="primary" color="#4b6bde" class="submit-btn" :disabled="!canSubmit" @click="submitPlan">完成设置</van-button>
       </section>
     </template>
 
@@ -271,7 +307,18 @@ watch(
 
 .submit-wrap {
   margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.submit-btn {
+  width: 66%;
+  height: 38px;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.submit-btn:deep(.van-button__content) {
+  font-size: 1rem;
 }
 </style>
-
-

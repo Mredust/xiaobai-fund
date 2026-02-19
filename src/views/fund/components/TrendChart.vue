@@ -12,6 +12,13 @@ type AxisLabelNode = {
   className: 'start' | 'middle' | 'end'
 }
 
+type TrendMarkerNode = {
+  x: number
+  y: number
+  color: string
+  key: string
+}
+
 const props = withDefaults(
   defineProps<{
     points: TrendPoint[]
@@ -19,12 +26,14 @@ const props = withDefaults(
     xAxisLabels?: string[]
     costLineValue?: number | null
     costLineLabel?: string
+    markers?: Array<{ index: number; color?: string }>
   }>(),
   {
     color: '#2c77f4',
     xAxisLabels: () => [],
     costLineValue: null,
-    costLineLabel: '成本线'
+    costLineLabel: '成本线',
+    markers: () => []
   }
 )
 
@@ -130,6 +139,32 @@ const costLineLabelTop = computed(() => {
   const top = (costLineY.value / viewHeight) * 100
   return `calc(${top.toFixed(2)}% - 10px)`
 })
+
+const markerNodes = computed<TrendMarkerNode[]>(() => {
+  if (!normalized.value.length || !props.markers.length) {
+    return []
+  }
+
+  return props.markers
+    .map((item, index) => {
+      const rawIndex = Number(item.index)
+      if (!Number.isFinite(rawIndex)) {
+        return null
+      }
+      const pointIndex = Math.max(0, Math.min(normalized.value.length - 1, Math.round(rawIndex)))
+      const point = normalized.value[pointIndex]
+      if (!point) {
+        return null
+      }
+      return {
+        x: point.x,
+        y: point.y,
+        color: item.color || '#e34a4a',
+        key: `${pointIndex}-${index}-${item.color || ''}`
+      }
+    })
+    .filter((item): item is TrendMarkerNode => Boolean(item))
+})
 </script>
 
 <template>
@@ -151,6 +186,15 @@ const costLineLabelTop = computed(() => {
         :y1="costLineY"
         :y2="costLineY"
         class="cost-line"
+      />
+      <circle
+        v-for="marker in markerNodes"
+        :key="marker.key"
+        :cx="marker.x"
+        :cy="marker.y"
+        r="3.8"
+        :fill="marker.color"
+        class="marker-dot"
       />
     </svg>
     <span v-if="costLineY !== null" class="cost-line-label" :style="{ top: costLineLabelTop }">{{ costLineLabel }}</span>
@@ -205,6 +249,11 @@ svg {
   border-radius: 8px;
   padding: 2px 6px;
   pointer-events: none;
+}
+
+.marker-dot {
+  stroke: #fff;
+  stroke-width: 1.4;
 }
 
 .x-axis-row {
