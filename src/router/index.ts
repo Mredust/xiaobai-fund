@@ -21,11 +21,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/select/WatchlistView.vue')
       },
       {
-        path: 'market',
-        name: 'market',
-        component: () => import('@/views/market/MarketView.vue')
-      },
-      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/my/ProfileView.vue')
@@ -106,11 +101,6 @@ const routes: RouteRecordRaw[] = [
     path: '/fund/:code/trade-record',
     name: 'fund-trade-record',
     component: () => import('@/views/fund/TradeRecordView.vue')
-  },
-  {
-    path: '/sector/:name',
-    name: 'sector-detail',
-    component: () => import('@/views/select/SectorDetailView.vue')
   },
   {
     path: '/profile-info',

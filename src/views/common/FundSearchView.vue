@@ -20,7 +20,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasKeyword = computed(() => keyword.value.trim().length > 0)
 const historyList = computed(() => fundStore.searchHistory)
-const tabRouteWhitelist = new Set(['/holdings', '/watchlist', '/market', '/profile'])
+const tabRouteWhitelist = new Set(['/holdings', '/watchlist', '/profile'])
 const pickMode = computed(() => String(route.query.mode || ''))
 const isPickMode = computed(
     () => pickMode.value === 'pick' || pickMode.value === 'pick-convert' || pickMode.value === 'pick-import'

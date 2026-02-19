@@ -14,9 +14,6 @@ const active = computed(() => {
   if (path.startsWith('/watchlist')) {
     return '/watchlist'
   }
-  if (path.startsWith('/market')) {
-    return '/market'
-  }
   if (path.startsWith('/profile')) {
     return '/profile'
   }
