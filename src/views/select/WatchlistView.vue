@@ -12,6 +12,7 @@ const tagStore = useTagStore()
 const fundStore = useFundStore()
 const pageRef = ref<HTMLElement | null>(null)
 const watchTopRef = ref<HTMLElement | null>(null)
+type SortOrder = 'asc' | 'desc'
 
 const watchTags = computed(() => tagStore.watchTags)
 const activeWatchTagId = computed(() => tagStore.activeWatchTagId)
@@ -40,6 +41,42 @@ const watchFunds = computed(() => {
   }
 
   return fundStore.getWatchFundsByTag(activeWatchTagId.value)
+})
+
+const watchDailyChangeSortOrder = ref<SortOrder>('desc')
+
+const toggleWatchDailyChangeSort = () => {
+  // 当日涨幅排序：首次点击升序，再次点击降序，循环切换。
+  watchDailyChangeSortOrder.value = watchDailyChangeSortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
+const sortedWatchFunds = computed(() => {
+  const order = watchDailyChangeSortOrder.value
+  const list = [...watchFunds.value]
+  if (!order) {
+    return list
+  }
+
+  return list.sort((left, right) => {
+    const leftValue = Number.isFinite(Number(left.dailyChange)) ? Number(left.dailyChange) : null
+    const rightValue = Number.isFinite(Number(right.dailyChange)) ? Number(right.dailyChange) : null
+
+    if (leftValue === null && rightValue === null) {
+      return left.code.localeCompare(right.code)
+    }
+    if (leftValue === null) {
+      return 1
+    }
+    if (rightValue === null) {
+      return -1
+    }
+
+    if (leftValue === rightValue) {
+      return left.code.localeCompare(right.code)
+    }
+
+    return order === 'asc' ? leftValue - rightValue : rightValue - leftValue
+  })
 })
 
 const watchFundCodes = computed(() =>
@@ -229,10 +266,18 @@ watch(
           </button>
         </div>
         <div class="metrics">
-          <div>
+          <button type="button" class="sort-trigger" @click="toggleWatchDailyChangeSort">
             <span>当日涨幅</span>
-            <small>{{ latestEstimateDate }}</small>
-          </div>
+            <span
+                class="sort-icon"
+                :class="watchDailyChangeSortOrder ? `is-${watchDailyChangeSortOrder}` : ''"
+                aria-hidden="true"
+            >
+              <i class="sort-triangle up"></i>
+              <i class="sort-triangle down"></i>
+            </span>
+          </button>
+          <small>{{ latestEstimateDate }}</small>
         </div>
       </div>
     </section>
@@ -248,7 +293,7 @@ watch(
 
       <template v-else>
         <article
-            v-for="item in watchFunds"
+            v-for="item in sortedWatchFunds"
             :key="item.id"
             class="fund-row"
             @click="onFundClick(item)"
@@ -351,20 +396,61 @@ watch(
 }
 
 .metrics {
-  display: flex;
-  gap: 16px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   color: #6f768d;
+  font-size: 0.75rem;
 }
 
-.metrics div {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  font-size: 0.75rem;
+.sort-trigger {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
 }
 
 .metrics small {
   color: #a1a6b8;
+}
+
+.sort-icon {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sort-triangle {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  opacity: 0.35;
+}
+
+.sort-triangle.up {
+  border-bottom: 5px solid #9aa2b8;
+}
+
+.sort-triangle.down {
+  border-top: 5px solid #9aa2b8;
+}
+
+.sort-icon.is-asc .sort-triangle.up {
+  opacity: 1;
+  border-bottom-color: #2f5bd8;
+}
+
+.sort-icon.is-desc .sort-triangle.down {
+  opacity: 1;
+  border-top-color: #2f5bd8;
 }
 
 .list-card {

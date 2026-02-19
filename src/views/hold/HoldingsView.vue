@@ -23,6 +23,9 @@ interface SummaryCardItem {
   trendPath: string
 }
 
+type SortOrder = 'asc' | 'desc'
+type HoldingSortField = 'dayProfit' | 'dailyChange' | 'holdingProfit'
+
 const router = useRouter()
 const tagStore = useTagStore()
 const fundStore = useFundStore()
@@ -152,6 +155,66 @@ const parseMetricNumber = (value: string | number | undefined | null) => {
   const numeric = Number(normalized.replace(/[^\d.-]/g, ''))
   return Number.isFinite(numeric) ? numeric : null
 }
+
+const activeFundSortField = ref<HoldingSortField>('dayProfit')
+const activeFundSortOrder = ref<SortOrder>('desc')
+
+const toggleFundSort = (field: HoldingSortField) => {
+  // 列表按指定列切换升降序，新列首次点击默认为升序。
+  if (activeFundSortField.value !== field) {
+    activeFundSortField.value = field
+    activeFundSortOrder.value = 'asc'
+    return
+  }
+  activeFundSortOrder.value = activeFundSortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
+const getFundSortIconClass = (field: HoldingSortField) => {
+  if (activeFundSortField.value !== field) {
+    return ''
+  }
+  return activeFundSortOrder.value === 'asc' ? 'is-asc' : 'is-desc'
+}
+
+const getHoldingSortValue = (item: WatchFundItem, field: HoldingSortField) => {
+  if (field === 'dayProfit') {
+    return parseMetricNumber(fundStore.positionByCode[item.code]?.yesterdayProfit)
+  }
+  if (field === 'dailyChange') {
+    return Number.isFinite(Number(item.dailyChange)) ? Number(item.dailyChange) : null
+  }
+  return parseMetricNumber(fundStore.positionByCode[item.code]?.profit)
+}
+
+const sortedDisplayFunds = computed(() => {
+  const field = activeFundSortField.value
+  const order = activeFundSortOrder.value
+  const list = [...displayFunds.value]
+  if (!field) {
+    return list
+  }
+
+  return list.sort((left, right) => {
+    const leftValue = getHoldingSortValue(left, field)
+    const rightValue = getHoldingSortValue(right, field)
+
+    if (leftValue === null && rightValue === null) {
+      return left.code.localeCompare(right.code)
+    }
+    if (leftValue === null) {
+      return 1
+    }
+    if (rightValue === null) {
+      return -1
+    }
+
+    if (leftValue === rightValue) {
+      return left.code.localeCompare(right.code)
+    }
+
+    return order === 'asc' ? leftValue - rightValue : rightValue - leftValue
+  })
+})
 
 const getMetricClass = (value: string | number | undefined | null) => {
   const numeric = parseMetricNumber(value)
@@ -533,14 +596,32 @@ watch(
 
       <div class="funds-header">
         <span>基金名称</span>
-        <span>当日收益</span>
-        <span>当日涨幅</span>
-        <span>持有收益</span>
+        <button type="button" class="header-sort-btn" @click="toggleFundSort('dayProfit')">
+          <span>当日收益</span>
+          <span class="sort-icon" :class="getFundSortIconClass('dayProfit')" aria-hidden="true">
+            <i class="sort-triangle up"></i>
+            <i class="sort-triangle down"></i>
+          </span>
+        </button>
+        <button type="button" class="header-sort-btn" @click="toggleFundSort('dailyChange')">
+          <span>当日涨幅</span>
+          <span class="sort-icon" :class="getFundSortIconClass('dailyChange')" aria-hidden="true">
+            <i class="sort-triangle up"></i>
+            <i class="sort-triangle down"></i>
+          </span>
+        </button>
+        <button type="button" class="header-sort-btn" @click="toggleFundSort('holdingProfit')">
+          <span>持有收益</span>
+          <span class="sort-icon" :class="getFundSortIconClass('holdingProfit')" aria-hidden="true">
+            <i class="sort-triangle up"></i>
+            <i class="sort-triangle down"></i>
+          </span>
+        </button>
       </div>
 
       <div class="fund-list">
         <article
-            v-for="item in displayFunds"
+            v-for="item in sortedDisplayFunds"
             :key="item.id"
             class="fund-item"
             @click="onFundItemClick(item)"
@@ -863,16 +944,63 @@ watch(
   padding-bottom: 6px;
 }
 
-.funds-header > span {
+.funds-header > span,
+.funds-header > button {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   text-align: right;
 }
 
-.funds-header > span:first-child {
+.funds-header > span:first-child,
+.funds-header > button:first-child {
   justify-content: flex-start;
   text-align: left;
+}
+
+.header-sort-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sort-icon {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sort-triangle {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  opacity: 0.35;
+}
+
+.sort-triangle.up {
+  border-bottom: 5px solid #9aa2b8;
+}
+
+.sort-triangle.down {
+  border-top: 5px solid #9aa2b8;
+}
+
+.sort-icon.is-asc .sort-triangle.up {
+  opacity: 1;
+  border-bottom-color: #2f5bd8;
+}
+
+.sort-icon.is-desc .sort-triangle.down {
+  opacity: 1;
+  border-top-color: #2f5bd8;
 }
 
 .empty-wrap {
